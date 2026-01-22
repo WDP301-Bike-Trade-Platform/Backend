@@ -1,0 +1,396 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  engineType    = "binary"  // ← THÊM DÒNG NÀY
+}
+
+// ============================== ENUMS ==============================
+
+enum RoleName {
+  USER
+  INSPECTOR
+  ADMIN
+}
+
+enum ListingStatus {
+  ACTIVE
+  HIDDEN
+  SOLD
+  EXPIRED
+  PENDING_APPROVAL
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  DEPOSITED
+  COMPLETED
+  CANCELLED
+  CONFIRMED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum NotificationType {
+  MESSAGE
+  ORDER
+  INSPECTION
+  SYSTEM
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum InspectionStatus {
+  PENDING
+  PASSED
+  FAILED
+  EXPIRED
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
+  PICKUP
+  DROPOFF
+}
+
+model Role {
+  role_id   Int      @id @default(autoincrement())
+  role_name RoleName @unique
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  user_id         String    @id @default(uuid())
+  full_name       String
+  email           String    @unique
+  phone           String    @unique
+  password        String
+  role_id         Int
+
+  is_verified     Boolean   @default(false) 
+
+  violation_count Int       @default(0)
+  locked_until    DateTime?
+  created_at      DateTime
+  ip_address      String?
+
+  role             Role             @relation(fields: [role_id], references: [role_id])
+  profile          UserProfile?
+  listings         Listing[]        @relation("SellerListings")
+  inspections      Inspection[]     @relation("InspectorInspections")
+  orders           Order[]          @relation("BuyerOrders")
+  messagesSent     Message[]        @relation("Sender")
+  messagesReceived Message[]        @relation("Receiver")
+  reviewsGiven     Review[]         @relation("Reviewer")
+  reviewsReceived  Review[]         @relation("Target")
+  reviewAsBuyer    Review[]         @relation("ReviewBuyer")
+  reviewAsSeller   Review[]         @relation("ReviewSeller")
+  paymentDeposits  PaymentDeposit[]
+  reports          Report[]
+  addresses        Address[]
+  notifications    Notification[]
+  otps             Otp[]
+
+  @@map("users")
+}
+
+
+model Otp {
+  id         String   @id @default(uuid())
+  user_id    String
+  code       String
+  expired_at DateTime
+
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@map("otps")
+}
+
+model UserProfile {
+  profile_id   String    @id @default(uuid())
+  user_id      String    @unique
+  dob          DateTime?
+  gender       String?
+  national_id  String?
+  bank_account String?
+  bank_name    String?
+  avatar_url   String?
+  created_at   DateTime
+
+  user User @relation(fields: [user_id], references: [user_id]) // FK side
+
+  @@map("user_profiles")
+}
+
+model Category {
+  category_id String @id @default(uuid())
+  name        String
+
+  vehicles Vehicle[]
+
+  @@map("categories")
+}
+
+model Vehicle {
+  vehicle_id  String   @id @default(uuid())
+  category_id String
+  brand       String
+  model       String
+  year        Int
+  price       Decimal
+  condition   String
+  frame_size  String?
+  description String?
+  created_at  DateTime
+
+  category     Category      @relation(fields: [category_id], references: [category_id])
+  listings     Listing[]
+  orderDetails OrderDetail[]
+
+  @@map("vehicles")
+}
+
+model Listing {
+  listing_id  String        @id @default(uuid())
+  seller_id   String
+  vehicle_id  String
+  status      ListingStatus
+  approved_by String?
+  approved_at DateTime?
+  expires_at  DateTime?
+  created_at  DateTime
+  updated_at  DateTime
+
+  seller       User           @relation("SellerListings", fields: [seller_id], references: [user_id])
+  vehicle      Vehicle        @relation(fields: [vehicle_id], references: [vehicle_id])
+  media        ListingMedia[]
+  inspections  Inspection[]
+  orders       Order[]
+  orderDetails OrderDetail[]
+  messages     Message[]
+  reviews      Review[]
+  reports      Report[]
+
+  @@map("listings")
+}
+
+model ListingMedia {
+  media_id    String    @id @default(uuid())
+  listing_id  String
+  type        MediaType
+  file_url    String
+  mime_type   String
+  size_bytes  BigInt
+  uploaded_at DateTime
+
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
+
+  @@map("listing_media")
+}
+
+model Inspection {
+  inspection_id String           @id @default(uuid())
+  inspector_id  String
+  listing_id    String
+  report_url    String?
+  status        InspectionStatus
+  valid_until   DateTime?
+  created_at    DateTime
+
+  inspector User    @relation("InspectorInspections", fields: [inspector_id], references: [user_id])
+  listing   Listing @relation(fields: [listing_id], references: [listing_id])
+
+  @@map("inspections")
+}
+
+model Order {
+  order_id       String      @id @default(uuid())
+  buyer_id       String
+  listing_id     String
+  deposit_amount Decimal
+  status         OrderStatus
+  confirmed_at   DateTime?
+  created_at     DateTime
+
+  buyer           User             @relation("BuyerOrders", fields: [buyer_id], references: [user_id])
+  listing         Listing          @relation(fields: [listing_id], references: [listing_id])
+  orderDetails    OrderDetail[]
+  orderAddresses  OrderAddress[]
+  payments        Payment[]
+  reviews         Review[]
+  paymentDeposits PaymentDeposit[] // added opposite relation
+
+  @@map("orders")
+}
+
+model OrderDetail {
+  order_detail_id String   @id @default(uuid())
+  order_id        String
+  listing_id      String
+  vehicle_id      String
+  quantity        Int
+  unit_price      Decimal
+  total_price     Decimal
+  created_at      DateTime
+
+  order   Order   @relation(fields: [order_id], references: [order_id])
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
+  vehicle Vehicle @relation(fields: [vehicle_id], references: [vehicle_id])
+
+  @@map("order_details")
+}
+
+model OrderAddress {
+  order_address_id String      @id @default(uuid())
+  order_id         String
+  address_id       String?
+  address_type     AddressType
+  address_snapshot String?
+  created_at       DateTime
+
+  order   Order    @relation(fields: [order_id], references: [order_id])
+  address Address? @relation(fields: [address_id], references: [address_id])
+
+  @@map("order_addresses")
+}
+
+model Payment {
+  payment_id   String        @id @default(uuid())
+  order_id     String
+  method       String
+  amount       Decimal
+  platform_fee Decimal?
+  status       PaymentStatus
+  created_at   DateTime
+
+  order    Order            @relation(fields: [order_id], references: [order_id])
+  deposits PaymentDeposit[]
+
+  @@map("payments")
+}
+
+model PaymentDeposit {
+  deposit_id String   @id @default(uuid())
+  payment_id String
+  order_id   String
+  buyer_id   String
+  amount     Decimal
+  note       String?
+  status     String
+  created_at DateTime
+
+  payment Payment @relation(fields: [payment_id], references: [payment_id])
+  order   Order   @relation(fields: [order_id], references: [order_id])
+  buyer   User    @relation(fields: [buyer_id], references: [user_id])
+
+  @@map("payment_deposits")
+}
+
+model Message {
+  message_id  String   @id @default(uuid())
+  sender_id   String
+  receiver_id String
+  listing_id  String?
+  content     String
+  created_at  DateTime
+
+  sender   User     @relation("Sender", fields: [sender_id], references: [user_id])
+  receiver User     @relation("Receiver", fields: [receiver_id], references: [user_id])
+  listing  Listing? @relation(fields: [listing_id], references: [listing_id])
+
+  @@map("messages")
+}
+
+model Review {
+  review_id            String    @id @default(uuid())
+  buyer_id             String?
+  seller_id            String?
+  reviewer_id          String
+  target_id            String
+  order_id             String?
+  listing_id           String?
+  rating               Int
+  comment              String?
+  is_verified_purchase Boolean   @default(false)
+  status               String    @default("APPROVED")
+  reported_count       Int       @default(0)
+  helpful_count        Int       @default(0)
+  created_at           DateTime
+  updated_at           DateTime?
+
+  reviewer User     @relation("Reviewer", fields: [reviewer_id], references: [user_id])
+  target   User     @relation("Target", fields: [target_id], references: [user_id])
+  order    Order?   @relation(fields: [order_id], references: [order_id])
+  listing  Listing? @relation(fields: [listing_id], references: [listing_id])
+  buyer    User?    @relation("ReviewBuyer", fields: [buyer_id], references: [user_id])
+  seller   User?    @relation("ReviewSeller", fields: [seller_id], references: [user_id])
+
+  @@map("reviews")
+}
+
+model Report {
+  report_id  String   @id @default(uuid())
+  user_id    String
+  listing_id String
+  reason     String
+  status     String
+  created_at DateTime
+
+  user    User    @relation(fields: [user_id], references: [user_id])
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
+
+  @@map("reports")
+}
+
+model Address {
+  address_id     String   @id @default(uuid())
+  user_id        String
+  label          String?
+  recipient_name String?
+  phone          String?
+  address_line1  String
+  address_line2  String?
+  ward           String?
+  district       String?
+  city           String?
+  postal_code    String?
+  country        String?
+  is_default     Boolean  @default(false)
+  created_at     DateTime
+
+  user           User           @relation(fields: [user_id], references: [user_id])
+  orderAddresses OrderAddress[]
+
+  @@map("addresses")
+}
+
+model Notification {
+  notification_id String           @id @default(uuid())
+  user_id         String
+  type            NotificationType
+  title           String
+  message         String
+  is_read         Boolean          @default(false)
+  created_at      DateTime
+
+  user User @relation(fields: [user_id], references: [user_id])
+
+  @@map("notifications")
+}
