@@ -4,21 +4,39 @@ import { CreateListingDto } from '../DTOs/create-listing.dto';
 import { ListingStatus, MediaType } from '@prisma/client';
 
 @Injectable()
-export class ProductsService {
+export class CreateListingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createListing(dto: CreateListingDto, sellerId: string) {
     return this.prisma.$transaction(async (tx) => {
+
+      // 🚫 0️⃣ CHECK: user có listing đang chờ duyệt không
+      const pendingListing = await tx.listing.findFirst({
+        where: {
+          seller_id: sellerId,
+          status: ListingStatus.PENDING_APPROVAL,
+        },
+        select: {
+          listing_id: true,
+        },
+      });
+
+      if (pendingListing) {
+        throw new BadRequestException(
+          'Bạn đang có tin đăng chờ duyệt. Vui lòng đợi admin duyệt trước khi đăng tin mới.',
+        );
+      }
+
       // 1️⃣ Category fallback = "Khác"
       let categoryId = dto.category_id;
 
       if (!categoryId) {
         const otherCategory = await tx.category.findFirst({
-        where: { name: 'Khác' },
+          where: { name: 'Khác' },
         });
 
         if (!otherCategory) {
-        throw new BadRequestException('Category "Khác" không tồn tại');
+          throw new BadRequestException('Category "Khác" không tồn tại');
         }
 
         categoryId = otherCategory.category_id;

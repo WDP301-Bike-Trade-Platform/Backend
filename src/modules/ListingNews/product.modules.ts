@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ProductsController } from './Controller/products.controller';
-import { ProductsService } from './Service/products.service';
 import { PrismaService } from 'src/database/prisma.service';
+import { CreateListingService } from './Service/createListing.service';
+import { GetListingService } from './Service/getListing.service';
 
 @Module({
   controllers: [ProductsController],
   providers: [
-    ProductsService,
+    GetListingService,
+    CreateListingService,
     PrismaService,
   ],
 })
