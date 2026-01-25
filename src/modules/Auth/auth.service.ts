@@ -81,46 +81,55 @@ export class AuthService {
     message: 'Xác nhận OTP thành công',
   };
   }
-  async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    async login(email: string, password: string, ip: string) {
+      const user = await this.prisma.user.findUnique({
+        where: { email: email.toLowerCase().trim() },
+      });
 
-    if (!user || !user.is_verified) {
-      throw new BadRequestException('Sai email hoặc mật khẩu');
-    }
+      if (!user || !user.is_verified) {
+        throw new BadRequestException('Sai email hoặc mật khẩu');
+      }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      throw new BadRequestException('Sai email hoặc mật khẩu');
-    }
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        throw new BadRequestException('Sai email hoặc mật khẩu');
+      }
 
-    const payload = {
-      sub: user.user_id,
-      email: user.email,
-      role_id: user.role_id,
-    };
+      // ✅ update IP mỗi lần login
+      await this.prisma.user.update({
+        where: { user_id: user.user_id },
+        data: {
+          ip_address: ip,
+        },
+      });
 
-    const access_token = await this.jwtService.signAsync(payload, {
-      expiresIn: '15m',
-    });
-
-    const refresh_token = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET,
-      expiresIn: '7d',
-    });
-
-    return {
-      ok: true,
-      access_token,
-      refresh_token,
-      user: {
-        user_id: user.user_id,
+      const payload = {
+        sub: user.user_id,
         email: user.email,
         role_id: user.role_id,
-      },
-    };
-  }
+      };
+
+      const access_token = await this.jwtService.signAsync(payload, {
+        expiresIn: '15m',
+      });
+
+      const refresh_token = await this.jwtService.signAsync(payload, {
+        secret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: '1d',
+      });
+
+      return {
+        ok: true,
+        access_token,
+        refresh_token,
+        user: {
+          user_id: user.user_id,
+          email: user.email,
+          role_id: user.role_id,
+        },
+      };
+    }
+
 
 
   async forgotPassword(email: string) {
