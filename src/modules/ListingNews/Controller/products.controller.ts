@@ -2,10 +2,11 @@ import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { ProductsService } from '../Service/products.service';
 import { CreateListingDto } from '../DTOs/create-listing.dto';
 import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 
+@ApiTags('Listing Products')
 @Controller('listingProduct')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)

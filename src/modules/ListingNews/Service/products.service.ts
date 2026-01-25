@@ -28,19 +28,35 @@ export class ProductsService {
       const vehicle = await tx.vehicle.create({
         data: {
           category_id: categoryId,
+
           brand: dto.brand.trim(),
           model: dto.model.trim(),
+          year: dto.year,
           price: dto.price,
+
+          bike_type: dto.bike_type,
+          material: dto.material,
+          brake_type: dto.brake_type,
+          wheel_size: dto.wheel_size,
+
           condition: 'USED',
-          year: new Date().getFullYear(),
+          usage_level: dto.usage_level,
+          mileage_km: dto.mileage_km,
+
+          groupset: dto.groupset,
+          frame_size: dto.frame_size,
+
+          is_original: dto.is_original ?? true,
+          has_receipt: dto.has_receipt ?? false,
+          frame_serial: dto.frame_serial,
+
           description: dto.description,
-          created_at: new Date(),
         },
       });
 
       // 3️⃣ Tạo Listing
       const listing = await tx.listing.create({
-        data: {
+        data: { 
           seller_id: sellerId,
           vehicle_id: vehicle.vehicle_id,
           status: ListingStatus.PENDING_APPROVAL,
