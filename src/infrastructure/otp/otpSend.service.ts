@@ -11,7 +11,6 @@ export class OtpDbService extends OtpService {
     super();
   }
 
-
   async saveOtpForUser(
     userId: string,
     otp: string,
@@ -34,10 +33,7 @@ export class OtpDbService extends OtpService {
   }
 
   // 👉 Verify OTP
-  async verifyOtpForUser(
-    userId: string,
-    otp: string,
-  ): Promise<boolean> {
+  async verifyOtpForUser(userId: string, otp: string): Promise<boolean> {
     const record = await this.prisma.otp.findFirst({
       where: {
         user_id: userId,
@@ -117,7 +113,5 @@ export class OtpDbService extends OtpService {
       </div>
       `,
     });
-
   }
 }
-

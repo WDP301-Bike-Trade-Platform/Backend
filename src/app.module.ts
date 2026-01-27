@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { AuthModule } from './modules/Auth/auth.module';
+import { ProductsModule } from './modules/ListingNews/product.modules';
+import { CategoryModule } from './modules/Category/category.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [AuthModule], // 👈 thêm AuthModule vào đây
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ScheduleModule.forRoot(),
+    AuthModule,
+    CategoryModule,
+    ProductsModule,
+  ],
 })
 export class AppModule {}

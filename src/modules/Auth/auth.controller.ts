@@ -3,6 +3,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
 } from '@nestjs/common';
 import { AuthService } from '../Auth/auth.service';
@@ -34,8 +35,8 @@ export class AuthController {
   // ================= LOGIN =================
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
+    return this.authService.login(dto.email, dto.password, ip);
   }
 
   // ================= FORGOT PASSWORD =================
@@ -57,7 +58,7 @@ export class AuthController {
   }
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
-  refreshToken(@Body() dto: RefreshTokenDto ) {
+  refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
   }
 }
