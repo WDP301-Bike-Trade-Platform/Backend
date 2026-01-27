@@ -26,11 +26,6 @@ import { JwtAuthGuard } from '../../common/auth/jwt.guard';
     JwtAuthGuard,
     { provide: 'OtpService', useClass: OtpDbService },
   ],
-  exports: [
-    AuthService,
-    JwtModule,
-    JwtAuthGuard,
-    PassportModule,
-  ],
+  exports: [AuthService, JwtModule, JwtAuthGuard, PassportModule],
 })
 export class AuthModule {}

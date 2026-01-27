@@ -7,7 +7,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { JwtAuthGuard } from '../../common/auth/jwt.guard';
 import { User } from '../../common/decorators/user.decorator';
@@ -35,7 +40,9 @@ export class UserController {
    * PUT /user/profile
    * Cập nhật thông tin profile của user đang đăng nhập
    */
-  @ApiOperation({ summary: 'Cập nhật thông tin profile của user đang đăng nhập' })
+  @ApiOperation({
+    summary: 'Cập nhật thông tin profile của user đang đăng nhập',
+  })
   @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng' })
   @Put('profile')
   @HttpCode(HttpStatus.OK)

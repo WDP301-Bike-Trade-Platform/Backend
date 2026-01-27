@@ -30,7 +30,9 @@ export class JwtAuthGuard {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException('Vui lòng đăng nhập để dùng tính năng này');
+      throw new UnauthorizedException(
+        'Vui lòng đăng nhập để dùng tính năng này',
+      );
     }
 
     try {

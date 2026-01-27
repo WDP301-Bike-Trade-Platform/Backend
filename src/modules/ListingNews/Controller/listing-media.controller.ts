@@ -16,7 +16,6 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
-
 @ApiTags('Listings Media')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -25,17 +24,11 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 export class ListingMediaController {
   constructor(private readonly mediaService: ListingMediaService) {}
 
-  // ==========================
-  // GET MEDIA BY LISTING
-  // ==========================
   @Get()
   getByListing(@Param('listingId') listingId: string) {
     return this.mediaService.getByListing(listingId);
   }
 
-  // ==========================
-  // ADD MANY MEDIA
-  // ==========================
   @Post()
   addMedia(@Param('listingId') listingId: string, @Body() body: AddMediaDto) {
     return this.mediaService.addMedia(
@@ -44,22 +37,16 @@ export class ListingMediaController {
         file_url: file.file_url,
         mime_type: file.mime_type,
         size_bytes: BigInt(file.size_bytes),
-        type: file.media_type, // 🔥 FIX LỖI TẠI ĐÂY
+        type: file.media_type, // ✅ đồng bộ với service
       })),
     );
   }
 
-  // ==========================
-  // SET COVER IMAGE
-  // ==========================
   @Patch(':mediaId/cover')
   setCover(@Param('mediaId') mediaId: string) {
     return this.mediaService.setCover(mediaId);
   }
 
-  // ==========================
-  // REPLACE MEDIA FILE
-  // ==========================
   @Patch(':mediaId')
   replaceMedia(
     @Param('mediaId') mediaId: string,
@@ -72,19 +59,16 @@ export class ListingMediaController {
     });
   }
 
-  // ==========================
-  // DELETE ONE MEDIA
-  // ==========================
   @Delete(':mediaId')
   deleteOne(@Param('mediaId') mediaId: string) {
     return this.mediaService.deleteOne(mediaId);
   }
 
-  // ==========================
-  // DELETE MANY MEDIA
-  // ==========================
   @Delete()
-  deleteMany(@Body() body: DeleteManyMediaDto) {
+  deleteMany(
+    @Param('listingId') listingId: string,
+    @Body() body: DeleteManyMediaDto,
+  ) {
     return this.mediaService.deleteMany(body.mediaIds);
   }
 }
