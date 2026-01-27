@@ -375,6 +375,7 @@ enum ListingStatus {
   HIDDEN
   SOLD
   EXPIRED
+  APPROVED
   PENDING_APPROVAL
   REJECTED
 }
