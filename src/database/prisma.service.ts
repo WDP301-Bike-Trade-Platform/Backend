@@ -14,8 +14,6 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    // Prisma v7 tự động đọc DATABASE_URL từ env
-    // NHƯNG phải truyền ít nhất 1 option
     super({
       log: ['error', 'warn'],
     });
