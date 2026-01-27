@@ -10,8 +10,10 @@ import { AdminListingService } from './Service/adminApprovedListing.service';
 import { ListingExpirationCron } from './cron/listing-expiration.cron';
 import { ListingMediaService } from './Service/listingMediaService';
 import { ListingMediaController } from './Controller/listing-media.controller';
+import { AuthModule } from '../Auth/auth.module';
 
 @Module({
+  imports: [AuthModule],
   controllers: [
     ProductsController,
     ListingMediaController,

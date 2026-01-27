@@ -24,6 +24,7 @@ import {
 } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 import { ListingStatus } from '@prisma/client';
 import { ChangeListingStatusDto } from '../DTOs/seller-update-listing-status.dto';
 import { ChangeListingStatusService } from '../Service/sellerListingStatus.service';
@@ -64,7 +65,7 @@ export class ProductsController {
     return this.updateListingService.updateListing(id, sellerId, dto);
   }
 
-  @Roles(2, 3)
+  @Public()
   @Get()
   @ApiOperation({ summary: 'Get all listings (admin / public)' })
   @ApiQuery({ name: 'page', required: false })
