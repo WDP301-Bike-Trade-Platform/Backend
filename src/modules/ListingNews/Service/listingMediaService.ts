@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { MediaType, ListingStatus } from '@prisma/client';
 
@@ -27,9 +24,7 @@ export class ListingMediaService {
       listing.status === ListingStatus.SOLD ||
       listing.status === ListingStatus.HIDDEN
     ) {
-      throw new BadRequestException(
-        'Listing không thể chỉnh sửa media',
-      );
+      throw new BadRequestException('Listing không thể chỉnh sửa media');
     }
   }
 
@@ -51,10 +46,7 @@ export class ListingMediaService {
   async getByListing(listingId: string) {
     return this.prisma.listingMedia.findMany({
       where: { listing_id: listingId },
-      orderBy: [
-        { is_cover: 'desc' },
-        { uploaded_at: 'asc' },
-      ],
+      orderBy: [{ is_cover: 'desc' }, { uploaded_at: 'asc' }],
     });
   }
 
@@ -77,9 +69,7 @@ export class ListingMediaService {
     });
 
     if (count + files.length > 10) {
-      throw new BadRequestException(
-        'Mỗi tin tối đa 10 ảnh',
-      );
+      throw new BadRequestException('Mỗi tin tối đa 10 ảnh');
     }
 
     const hasCover = await this.prisma.listingMedia.findFirst({
@@ -180,9 +170,7 @@ export class ListingMediaService {
   // ==========================
   async deleteMany(mediaIds: string[]) {
     if (!mediaIds.length) {
-      throw new BadRequestException(
-        'Danh sách media rỗng',
-      );
+      throw new BadRequestException('Danh sách media rỗng');
     }
 
     const medias = await this.prisma.listingMedia.findMany({
@@ -190,17 +178,13 @@ export class ListingMediaService {
     });
 
     if (!medias.length) {
-      throw new BadRequestException(
-        'Media không tồn tại',
-      );
+      throw new BadRequestException('Media không tồn tại');
     }
 
     const listingId = medias[0].listing_id;
     await this.assertListingEditable(listingId);
 
-    const deletingCover = medias.some(
-      (m) => m.is_cover,
-    );
+    const deletingCover = medias.some((m) => m.is_cover);
 
     await this.prisma.listingMedia.deleteMany({
       where: { media_id: { in: mediaIds } },

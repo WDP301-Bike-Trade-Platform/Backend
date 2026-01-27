@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { CreateListingService } from '../Service/createListing.service';
 import { GetListingService } from '../Service/getListing.service';
 import { UpdateListingService } from '../Service/updateListing.service';
@@ -26,6 +27,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { ListingStatus } from '@prisma/client';
 import { ChangeListingStatusDto } from '../DTOs/seller-update-listing-status.dto';
 import { ChangeListingStatusService } from '../Service/sellerListingStatus.service';
+import { JwtUser } from 'src/common/types/types';
 
 @ApiTags('Listing Products')
 @ApiBearerAuth('access-token')
@@ -36,54 +38,32 @@ export class ProductsController {
     private readonly createListingService: CreateListingService,
     private readonly getListingService: GetListingService,
     private readonly updateListingService: UpdateListingService,
-      private readonly changeListingStatusService: ChangeListingStatusService,
-
+    private readonly changeListingStatusService: ChangeListingStatusService,
   ) {}
 
-  /**
-   * ==========================
-   * CREATE LISTING
-   * ==========================
-   * ROLE: SELLER (1)
-   * - Không cho tạo nếu còn listing đang PENDING
-   */
   @Roles(1)
   @Post('/create')
   @ApiOperation({ summary: 'Seller creates a new listing' })
-  async createListing(@Body() dto: CreateListingDto, @Req() req: any) {
+  async createListing(
+    @Body() dto: CreateListingDto,
+    @Req() req: Request & { user: JwtUser },
+  ) {
     const sellerId = req.user.user_id;
     return this.createListingService.createListing(dto, sellerId);
   }
 
-  /**
-   * ==========================
-   * UPDATE LISTING
-   * ==========================
-   * ROLE: SELLER (1)
-   * RULE:
-   * - Chỉ update khi listing đang PENDING_APPROVAL
-   * - Update được info vehicle + hình ảnh
-   */
   @Roles(1)
   @Patch('/:id')
   @ApiOperation({ summary: 'Seller updates their pending listing' })
   async updateListing(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: Request & { user: JwtUser },
     @Body() dto: UpdateListingDto,
   ) {
     const sellerId = req.user.user_id;
     return this.updateListingService.updateListing(id, sellerId, dto);
   }
 
-  /**
-   * ==========================
-   * GET ALL LISTINGS
-   * ==========================
-   * ROLE:
-   * - ADMIN (2): xem tất cả
-   * - USER / BUYER (3): chỉ nên thấy APPROVED
-   */
   @Roles(2, 3)
   @Get()
   @ApiOperation({ summary: 'Get all listings (admin / public)' })
@@ -102,12 +82,6 @@ export class ProductsController {
     });
   }
 
-  /**
-   * ==========================
-   * GET MY LISTINGS
-   * ==========================
-   * ROLE: SELLER (1)
-   */
   @Roles(1)
   @Get('/me')
   @ApiOperation({ summary: 'Seller gets their own listings' })
@@ -115,7 +89,7 @@ export class ProductsController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'status', enum: ListingStatus, required: false })
   async getByMe(
-    @Req() req: any,
+    @Req() req: Request & { user: JwtUser },
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: ListingStatus,
@@ -129,40 +103,22 @@ export class ProductsController {
     });
   }
 
-  /**
-   * ==========================
-   * GET LISTING BY ID
-   * ==========================
-   * ROLE:
-   * - ADMIN (2)
-   * - USER / BUYER (3)
-   */
   @Roles(2, 3)
   @Get('/:id')
   @ApiOperation({ summary: 'Get listing detail by id' })
   async getById(@Param('id') id: string) {
     return this.getListingService.getById(id);
   }
-    /**
-   * ==========================
-   * SELLER CHANGE LISTING STATUS
-   * ==========================
-   * ROLE: SELLER (1)
-   */
+
   @Roles(1)
   @Patch('/:id/status')
   @ApiOperation({ summary: 'Seller change listing status (hide/show/sold)' })
   async changeStatus(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: Request & { user: JwtUser },
     @Body() dto: ChangeListingStatusDto,
   ) {
     const sellerId = req.user.user_id;
-    return this.changeListingStatusService.changeStatus(
-      id,
-      sellerId,
-      dto,
-    );
+    return this.changeListingStatusService.changeStatus(id, sellerId, dto);
   }
-
 }

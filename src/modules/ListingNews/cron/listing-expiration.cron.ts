@@ -28,9 +28,7 @@ export class ListingExpirationCron {
     });
 
     if (result.count > 0) {
-      console.log(
-        `[CRON] Hidden ${result.count} expired listings`,
-      );
+      console.log(`[CRON] Hidden ${result.count} expired listings`);
     }
   }
 }

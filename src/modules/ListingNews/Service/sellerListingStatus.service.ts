@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
+import { ListingStatus } from '@prisma/client';
 import {
-  ListingStatus,
-} from '@prisma/client';
-import { ChangeListingStatusDto, SellerListingAction } from '../DTOs/seller-update-listing-status.dto';
-
+  ChangeListingStatusDto,
+  SellerListingAction,
+} from '../DTOs/seller-update-listing-status.dto';
 
 @Injectable()
 export class ChangeListingStatusService {
@@ -40,12 +40,12 @@ export class ChangeListingStatusService {
     }
 
     // ❗ Seller CHỈ được thao tác khi đã APPROVED
-    if (listing.status !== ListingStatus.APPROVED &&
-        listing.status !== ListingStatus.ACTIVE &&
-        listing.status !== ListingStatus.HIDDEN) {
-      throw new BadRequestException(
-        'Tin chưa được duyệt hoặc đã hết hiệu lực',
-      );
+    if (
+      listing.status !== ListingStatus.APPROVED &&
+      listing.status !== ListingStatus.ACTIVE &&
+      listing.status !== ListingStatus.HIDDEN
+    ) {
+      throw new BadRequestException('Tin chưa được duyệt hoặc đã hết hiệu lực');
     }
 
     const nextStatus = this.mapActionToStatus(dto.action);

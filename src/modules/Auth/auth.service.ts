@@ -1,10 +1,18 @@
-import { BadRequestException, ConflictException, Inject, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { OtpService } from '../../infrastructure/otp/otpSendservice';
 import { JwtService } from '@nestjs/jwt';
 import { ResetTokenService } from 'src/infrastructure/reset-token/reset-token.service';
+import { Prisma } from '@prisma/client';
+import { JwtPayload } from 'src/common/types/jwt-payload.interface';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +23,9 @@ export class AuthService {
     @Inject('OtpService') private otpService: OtpService,
   ) {}
 
+  // ==========================
+  // REGISTER
+  // ==========================
   async register(dto: CreateUserDto) {
     const email = dto.email.toLowerCase().trim();
     const hashed = await bcrypt.hash(dto.password, 10);
@@ -42,96 +53,102 @@ export class AuthService {
         ok: true,
         message: 'OTP đã gửi. Vui lòng xác nhận tài khoản.',
       };
-    } catch (error) {
-      if ((error as any)?.code === 'P2002') {
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException('Email/phone đã tồn tại');
       }
       throw new InternalServerErrorException('Lỗi khi đăng ký');
     }
   }
+
+  // ==========================
+  // VERIFY OTP
+  // ==========================
   async verifyOtp(email: string, otp: string) {
-  const user = await this.prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
-  });
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
 
-  if (!user) {
-    throw new BadRequestException('User không tồn tại');
-  }
-
-  if (user.is_verified) {
-    throw new BadRequestException('Tài khoản đã được xác nhận');
-  }
-
-  const isValid = await this.otpService.verifyOtpForUser(
-    user.user_id,
-    otp,
-  );
-
-  if (!isValid) {
-    throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
-  }
-
-  await this.prisma.user.update({
-    where: { user_id: user.user_id },
-    data: { is_verified: true },
-  });
-
-  return {
-    ok: true,
-    message: 'Xác nhận OTP thành công',
-  };
-  }
-    async login(email: string, password: string, ip: string) {
-      const user = await this.prisma.user.findUnique({
-        where: { email: email.toLowerCase().trim() },
-      });
-
-      if (!user || !user.is_verified) {
-        throw new BadRequestException('Sai email hoặc mật khẩu');
-      }
-
-      const match = await bcrypt.compare(password, user.password);
-      if (!match) {
-        throw new BadRequestException('Sai email hoặc mật khẩu');
-      }
-
-      // ✅ update IP mỗi lần login
-      await this.prisma.user.update({
-        where: { user_id: user.user_id },
-        data: {
-          ip_address: ip,
-        },
-      });
-
-      const payload = {
-        sub: user.user_id,
-        email: user.email,
-        role_id: user.role_id,
-      };
-
-      const access_token = await this.jwtService.signAsync(payload, {
-        expiresIn: '15m',
-      });
-
-      const refresh_token = await this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
-        expiresIn: '1d',
-      });
-
-      return {
-        ok: true,
-        access_token,
-        refresh_token,
-        user: {
-          user_id: user.user_id,
-          email: user.email,
-          role_id: user.role_id,
-        },
-      };
+    if (!user) {
+      throw new BadRequestException('User không tồn tại');
     }
 
+    if (user.is_verified) {
+      throw new BadRequestException('Tài khoản đã được xác nhận');
+    }
 
+    const isValid = await this.otpService.verifyOtpForUser(user.user_id, otp);
 
+    if (!isValid) {
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+    }
+
+    await this.prisma.user.update({
+      where: { user_id: user.user_id },
+      data: { is_verified: true },
+    });
+
+    return {
+      ok: true,
+      message: 'Xác nhận OTP thành công',
+    };
+  }
+
+  // ==========================
+  // LOGIN
+  // ==========================
+  async login(email: string, password: string, ip: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+
+    if (!user || !user.is_verified) {
+      throw new BadRequestException('Sai email hoặc mật khẩu');
+    }
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      throw new BadRequestException('Sai email hoặc mật khẩu');
+    }
+
+    await this.prisma.user.update({
+      where: { user_id: user.user_id },
+      data: { ip_address: ip },
+    });
+
+    const payload: JwtPayload = {
+      sub: user.user_id,
+      email: user.email,
+      role_id: user.role_id,
+    };
+
+    const access_token = await this.jwtService.signAsync(payload, {
+      expiresIn: '15m',
+    });
+
+    const refresh_token = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_REFRESH_SECRET,
+      expiresIn: '1d',
+    });
+
+    return {
+      ok: true,
+      access_token,
+      refresh_token,
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        role_id: user.role_id,
+      },
+    };
+  }
+
+  // ==========================
+  // FORGOT PASSWORD
+  // ==========================
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
@@ -154,34 +171,24 @@ export class AuthService {
     };
   }
 
-
-  async resetPassword(
-    resetToken: string,
-    otp: string,
-    newPassword: string,
-  ) {
+  // ==========================
+  // RESET PASSWORD
+  // ==========================
+  async resetPassword(resetToken: string, otp: string, newPassword: string) {
     let userId: string;
 
-    // 1️⃣ verify reset token
     try {
       userId = this.resetTokenService.verify(resetToken);
     } catch {
-      throw new BadRequestException(
-        'Reset token không hợp lệ hoặc đã hết hạn',
-      );
+      throw new BadRequestException('Reset token không hợp lệ hoặc đã hết hạn');
     }
 
-    // 2️⃣ verify OTP theo user_id
-    const valid = await this.otpService.verifyOtpForUser(
-      userId,
-      otp,
-    );
+    const valid = await this.otpService.verifyOtpForUser(userId, otp);
 
     if (!valid) {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
 
-    // 3️⃣ update password
     const hashed = await bcrypt.hash(newPassword, 10);
 
     await this.prisma.user.update({
@@ -194,31 +201,33 @@ export class AuthService {
       message: 'Đổi mật khẩu thành công',
     };
   }
+
+  // ==========================
+  // REFRESH TOKEN
+  // ==========================
   async refreshToken(refreshToken: string) {
-  let payload: any;
+    let payload: JwtPayload;
 
-  try {
-    payload = await this.jwtService.verifyAsync(refreshToken, {
-      secret: process.env.JWT_REFRESH_SECRET,
-    });
-  } catch {
-    throw new BadRequestException('Refresh token không hợp lệ');
+    try {
+      payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET,
+      });
+    } catch {
+      throw new BadRequestException('Refresh token không hợp lệ');
+    }
+
+    const newAccessToken = await this.jwtService.signAsync(
+      {
+        sub: payload.sub,
+        email: payload.email,
+        role_id: payload.role_id,
+      },
+      { expiresIn: '15m' },
+    );
+
+    return {
+      ok: true,
+      access_token: newAccessToken,
+    };
   }
-
-  const newAccessToken = await this.jwtService.signAsync(
-    {
-      sub: payload.sub,
-      email: payload.email,
-      role_id: payload.role_id,
-    },
-    { expiresIn: '15m' },
-  );
-
-  return {
-    ok: true,
-    access_token: newAccessToken,
-  };
-  }
-
-
 }

@@ -35,8 +35,7 @@ export class AuthController {
   // ================= LOGIN =================
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto,
-        @Ip() ip: string,) {
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
     return this.authService.login(dto.email, dto.password, ip);
   }
 
@@ -59,7 +58,7 @@ export class AuthController {
   }
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
-  refreshToken(@Body() dto: RefreshTokenDto ) {
+  refreshToken(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshToken(dto.refreshToken);
   }
 }

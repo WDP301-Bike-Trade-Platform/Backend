@@ -6,21 +6,14 @@ import {
 } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 
-function serializeBigInt(data: any): any {
-  if (typeof data === 'bigint') {
-    return data.toString();
-  }
-
-  if (Array.isArray(data)) {
-    return data.map(serializeBigInt);
-  }
-
-  if (data !== null && typeof data === 'object') {
+function serializeBigInt(data: unknown): unknown {
+  if (typeof data === 'bigint') return data.toString();
+  if (Array.isArray(data)) return data.map(serializeBigInt);
+  if (data && typeof data === 'object') {
     return Object.fromEntries(
       Object.entries(data).map(([k, v]) => [k, serializeBigInt(v)]),
     );
   }
-
   return data;
 }
 

@@ -11,12 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  BikeType,
-  BrakeType,
-  FrameMaterial,
-  UsageLevel,
-} from '@prisma/client';
+import { BikeType, BrakeType, FrameMaterial, UsageLevel } from '@prisma/client';
 
 export class CreateListingDto {
   // ===== Category =====

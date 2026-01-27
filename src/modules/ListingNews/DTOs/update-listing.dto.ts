@@ -10,12 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  BikeType,
-  BrakeType,
-  FrameMaterial,
-  UsageLevel,
-} from '@prisma/client';
+import { BikeType, BrakeType, FrameMaterial, UsageLevel } from '@prisma/client';
 
 export class UpdateListingDto {
   // ===== Price / description =====
@@ -91,11 +86,7 @@ export class UpdateListingDto {
   // ===== Images (replace all) =====
   @ApiPropertyOptional({
     type: [String],
-    example: [
-      'https://img1.jpg',
-      'https://img2.jpg',
-      'https://img3.jpg',
-    ],
+    example: ['https://img1.jpg', 'https://img2.jpg', 'https://img3.jpg'],
     description: 'Nếu gửi images thì bắt buộc ≥ 3 ảnh',
   })
   @IsOptional()

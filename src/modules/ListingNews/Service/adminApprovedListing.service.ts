@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { ListingStatus } from '@prisma/client';
 import { BANNED_KEYWORDS } from 'src/common/types/banned_type';
+import { ListingWithVehicle } from 'src/common/types/types';
 
 @Injectable()
 export class AdminListingService {
@@ -10,11 +11,7 @@ export class AdminListingService {
   // ==========================
   // APPROVE LISTING
   // ==========================
-  async approveListing(
-    listingId: string,
-    adminId: string,
-    note?: string,
-  ) {
+  async approveListing(listingId: string, adminId: string, note?: string) {
     const listing = await this.prisma.listing.findUnique({
       where: { listing_id: listingId },
       include: {
@@ -70,11 +67,7 @@ export class AdminListingService {
   // ==========================
   // REJECT LISTING (MANUAL)
   // ==========================
-  async rejectListing(
-    listingId: string,
-    adminId: string,
-    note: string,
-  ) {
+  async rejectListing(listingId: string, adminId: string, note: string) {
     const listing = await this.prisma.listing.findUnique({
       where: { listing_id: listingId },
     });
@@ -96,7 +89,7 @@ export class AdminListingService {
   // PRIVATE HELPERS
   // ==========================
 
-  private detectBannedKeyword(listing: any): string | null {
+  private detectBannedKeyword(listing: ListingWithVehicle): string | null {
     const content = `
       ${listing.vehicle?.description ?? ''}
       ${listing.vehicle?.frame_serial ?? ''}
@@ -110,11 +103,7 @@ export class AdminListingService {
     );
   }
 
-  private async autoReject(
-    listingId: string,
-    adminId: string,
-    note: string,
-  ) {
+  private async autoReject(listingId: string, adminId: string, note: string) {
     await this.prisma.listing.update({
       where: { listing_id: listingId },
       data: {

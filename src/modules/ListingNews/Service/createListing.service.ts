@@ -9,7 +9,6 @@ export class CreateListingService {
 
   async createListing(dto: CreateListingDto, sellerId: string) {
     return this.prisma.$transaction(async (tx) => {
-
       // 🚫 0️⃣ CHECK: user có listing đang chờ duyệt không
       const pendingListing = await tx.listing.findFirst({
         where: {
@@ -74,7 +73,7 @@ export class CreateListingService {
 
       // 3️⃣ Tạo Listing
       const listing = await tx.listing.create({
-        data: { 
+        data: {
           seller_id: sellerId,
           vehicle_id: vehicle.vehicle_id,
           status: ListingStatus.PENDING_APPROVAL,

@@ -12,7 +12,11 @@ import { ListingMediaService } from './Service/listingMediaService';
 import { ListingMediaController } from './Controller/listing-media.controller';
 
 @Module({
-  controllers: [ProductsController,ListingMediaController,AdminListingController,],
+  controllers: [
+    ProductsController,
+    ListingMediaController,
+    AdminListingController,
+  ],
   providers: [
     GetListingService,
     CreateListingService,

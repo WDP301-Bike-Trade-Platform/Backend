@@ -23,17 +23,13 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 @Roles(1)
 @Controller('listings/:listingId/media')
 export class ListingMediaController {
-  constructor(
-    private readonly mediaService: ListingMediaService,
-  ) {}
+  constructor(private readonly mediaService: ListingMediaService) {}
 
   // ==========================
   // GET MEDIA BY LISTING
   // ==========================
   @Get()
-  getByListing(
-    @Param('listingId') listingId: string,
-  ) {
+  getByListing(@Param('listingId') listingId: string) {
     return this.mediaService.getByListing(listingId);
   }
 
@@ -41,10 +37,7 @@ export class ListingMediaController {
   // ADD MANY MEDIA
   // ==========================
   @Post()
-  addMedia(
-    @Param('listingId') listingId: string,
-    @Body() body: AddMediaDto,
-  ) {
+  addMedia(@Param('listingId') listingId: string, @Body() body: AddMediaDto) {
     return this.mediaService.addMedia(
       listingId,
       body.files.map((file) => ({
@@ -60,9 +53,7 @@ export class ListingMediaController {
   // SET COVER IMAGE
   // ==========================
   @Patch(':mediaId/cover')
-  setCover(
-    @Param('mediaId') mediaId: string,
-  ) {
+  setCover(@Param('mediaId') mediaId: string) {
     return this.mediaService.setCover(mediaId);
   }
 
@@ -85,9 +76,7 @@ export class ListingMediaController {
   // DELETE ONE MEDIA
   // ==========================
   @Delete(':mediaId')
-  deleteOne(
-    @Param('mediaId') mediaId: string,
-  ) {
+  deleteOne(@Param('mediaId') mediaId: string) {
     return this.mediaService.deleteOne(mediaId);
   }
 
@@ -95,9 +84,7 @@ export class ListingMediaController {
   // DELETE MANY MEDIA
   // ==========================
   @Delete()
-  deleteMany(
-    @Body() body: DeleteManyMediaDto,
-  ) {
+  deleteMany(@Body() body: DeleteManyMediaDto) {
     return this.mediaService.deleteMany(body.mediaIds);
   }
 }

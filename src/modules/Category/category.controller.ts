@@ -13,7 +13,7 @@ export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get()
-  @Roles(1,2,3)
+  @Roles(1, 2, 3)
   @ApiQuery({
     name: 'page',
     required: false,

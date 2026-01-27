@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { UpdateListingDto } from '../DTOs/update-listing.dto';
 import { ListingStatus, MediaType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UpdateListingService {
@@ -32,7 +33,7 @@ export class UpdateListingService {
       }
 
       // 1️⃣ Build vehicle update data (chỉ field có gửi)
-      const vehicleUpdateData: any = {
+      const vehicleUpdateData: Prisma.VehicleUpdateInput = {
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.price !== undefined && { price: dto.price }),
 
