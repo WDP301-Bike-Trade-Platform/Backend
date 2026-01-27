@@ -179,11 +179,14 @@ model ListingMedia {
   file_url    String
   mime_type   String
   size_bytes  BigInt
+  is_cover    Boolean   @default(false)
   uploaded_at DateTime
+
   listing     Listing   @relation(fields: [listing_id], references: [listing_id])
 
   @@map("listing_media")
 }
+
 
 model Inspection {
   inspection_id String           @id @default(uuid())
