@@ -7,6 +7,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OtpDbService } from '../../infrastructure/otp/otpSend.service';
 import { ResetTokenService } from 'src/infrastructure/reset-token/reset-token.service';
 import { JwtStrategy } from '../../common/auth/jwt.strategy';
+import { JwtAuthGuard } from '../../common/auth/jwt.guard';
 
 @Module({
   imports: [
@@ -21,13 +22,15 @@ import { JwtStrategy } from '../../common/auth/jwt.strategy';
     AuthService,
     PrismaService,
     ResetTokenService,
-    JwtStrategy, // 👈 BẮT BUỘC
+    JwtStrategy,
+    JwtAuthGuard,
     { provide: 'OtpService', useClass: OtpDbService },
   ],
   exports: [
     AuthService,
     JwtModule,
-    PassportModule, // 👈 để module khác dùng Guard
+    JwtAuthGuard,
+    PassportModule,
   ],
 })
 export class AuthModule {}
