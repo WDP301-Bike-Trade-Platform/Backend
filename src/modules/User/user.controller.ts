@@ -27,7 +27,7 @@ export class UserController {
   @ApiOperation({ summary: 'Lấy thông tin profile của user đang đăng nhập' })
   @Get('profile')
   @HttpCode(HttpStatus.OK)
-  getProfile(@User('sub') userId: string) {
+  getProfile(@User('user_id') userId: string) {
     return this.userService.getProfile(userId);
   }
 
@@ -39,7 +39,7 @@ export class UserController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng' })
   @Put('profile')
   @HttpCode(HttpStatus.OK)
-  updateProfile(@User('sub') userId: string, @Body() dto: UpdateUserDto) {
+  updateProfile(@User('user_id') userId: string, @Body() dto: UpdateUserDto) {
     return this.userService.updateProfile(userId, dto);
   }
 }

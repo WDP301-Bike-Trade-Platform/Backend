@@ -38,8 +38,12 @@ export class JwtAuthGuard {
         secret: process.env.JWT_SECRET,
       });
 
-      // Gán payload vào request để có thể truy cập trong controller
-      request.user = payload;
+      // Gán payload vào request, map 'sub' thành 'user_id' để dễ sử dụng
+      request.user = {
+        user_id: payload.sub,
+        email: payload.email,
+        role_id: payload.role_id,
+      };
     } catch {
       throw new UnauthorizedException('Đăng nhập không hợp lệ hoặc đã hết hạn');
     }
