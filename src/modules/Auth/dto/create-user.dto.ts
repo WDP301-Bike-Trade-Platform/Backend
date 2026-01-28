@@ -12,7 +12,7 @@ export class CreateUserDto {
   email: string;
 
   @ApiProperty({ example: '0901234567' })
-  @Matches(/^(0|(?:\+84))(3|5|7|8|9)([0-9]{8})$/)
+  @Matches(/^(0|(?:\+84))(3|5|7|8|9)([0-9]{8})$/, { message: 'Số điện thoại không hợp lệ' })
   @IsString()
   phone: string;
 
