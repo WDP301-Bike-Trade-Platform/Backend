@@ -46,8 +46,14 @@ export class AuthService {
 
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
+      // Save OTP đồng bộ (phải đợi)
       await this.otpService.saveOtpForUser(user.user_id, otp, 5 * 60);
-      await this.otpService.sendOtpByEmail(email, otp);
+      
+      // Send email BẤT ĐỒNG BỘ - không chờ kết quả để tránh block request
+      this.otpService.sendOtpByEmail(email, otp).catch((error) => {
+        console.error('Failed to send OTP email:', error);
+        // Log error nhưng không throw để không ảnh hưởng user experience
+      });
 
       return {
         ok: true,
@@ -161,8 +167,13 @@ export class AuthService {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const resetToken = this.resetTokenService.generate(user.user_id);
 
+    // Save OTP đồng bộ (phải đợi)
     await this.otpService.saveOtpForUser(user.user_id, otp, 5 * 60);
-    await this.otpService.sendOtpByEmail(email, otp);
+    
+    // Send email BẤT ĐỒNG BỘ - không chờ kết quả
+    this.otpService.sendOtpByEmail(email, otp).catch((error) => {
+      console.error('Failed to send OTP email:', error);
+    });
 
     return {
       ok: true,

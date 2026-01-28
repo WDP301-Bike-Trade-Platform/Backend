@@ -59,21 +59,26 @@ export class OtpDbService extends OtpService {
     return true;
   }
 
-  // 👉 Gửi OTP qua email
+  // 👉 Gửi OTP qua email với timeout
   async sendOtpByEmail(email: string, otp: string): Promise<void> {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS,
-      },
-    });
+    try {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS,
+        },
+        // Thêm timeout để tránh block quá lâu
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 5000,    // 5 seconds
+      });
 
-    await transporter.sendMail({
-      from: `"MyApp Security" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: 'Xác nhận OTP của bạn',
-      html: `
+      // Set timeout cho toàn bộ operation
+      const sendMailPromise = transporter.sendMail({
+        from: `"MyApp Security" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: 'Xác nhận OTP của bạn',
+        html: `
       <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px 0">
         <div style="max-width:480px; margin:auto; background:#ffffff; border-radius:12px; padding:32px; box-shadow:0 10px 30px rgba(0,0,0,0.08)">
           
@@ -112,6 +117,19 @@ export class OtpDbService extends OtpService {
         </div>
       </div>
       `,
-    });
+      });
+
+      // Race với timeout 15 seconds
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Email send timeout')), 15000),
+      );
+
+      await Promise.race([sendMailPromise, timeoutPromise]);
+      
+      this.logger.log(`✅ OTP email sent successfully to ${email}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send OTP email to ${email}:`, error);
+      throw error; // Re-throw để caller có thể catch và log
+    }
   }
 }
