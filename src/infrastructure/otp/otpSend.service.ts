@@ -63,14 +63,17 @@ export class OtpDbService extends OtpService {
   async sendOtpByEmail(email: string, otp: string): Promise<void> {
     try {
       const transporter = nodemailer.createTransport({
+        pool: true,
         service: 'gmail',
         auth: {
           user: process.env.GMAIL_USER,
           pass: process.env.GMAIL_PASS,
         },
+        maxConnections: 5, // Số lượng kết nối tối đa được giữ lại
+        maxMessages: 100,
         // Thêm timeout để tránh block quá lâu
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 5000,    // 5 seconds
+        connectionTimeout: 30000, // 30 seconds
+        greetingTimeout: 10000, // 10 seconds
       });
 
       // Set timeout cho toàn bộ operation
@@ -121,7 +124,7 @@ export class OtpDbService extends OtpService {
 
       // Race với timeout 15 seconds
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Email send timeout')), 15000),
+        setTimeout(() => reject(new Error('Email send timeout')), 30000),
       );
 
       await Promise.race([sendMailPromise, timeoutPromise]);
