@@ -5,6 +5,9 @@ import { CategoryModule } from './modules/Category/category.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from './modules/User/user.module';
 import { PaymentModule } from './modules/Payment/payment.module';
+import { OrderModule } from './modules/Order/order.module';
+import { CartModule } from './modules/Cart/cart.module';
+import { AddressModule } from './modules/Address/address.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -18,6 +21,9 @@ import { ConfigModule } from '@nestjs/config';
     ProductsModule,
     UserModule,
     PaymentModule,
+    OrderModule,
+    CartModule,
+    AddressModule,
   ],
 })
 export class AppModule {}

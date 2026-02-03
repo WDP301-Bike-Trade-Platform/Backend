@@ -58,6 +58,7 @@ model User {
   ip_address       String?
   is_verified      Boolean          @default(false)
   addresses        Address[]
+  cart             Cart?            @relation("BuyerCart")
   inspections      Inspection[]     @relation("InspectorInspections")
   listings         Listing[]        @relation("SellerListings")
   messagesReceived Message[]        @relation("Receiver")
@@ -160,6 +161,7 @@ model Listing {
   updated_at    DateTime
   approval_note String?
   inspections   Inspection[]
+  cartItems     CartItem[]
   media         ListingMedia[]
   seller        User           @relation("SellerListings", fields: [seller_id], references: [user_id])
   vehicle       Vehicle        @relation(fields: [vehicle_id], references: [vehicle_id])
@@ -365,6 +367,30 @@ model Notification {
   user            User             @relation(fields: [user_id], references: [user_id])
 
   @@map("notifications")
+}
+
+model Cart {
+  cart_id    String     @id @default(uuid())
+  buyer_id   String     @unique
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+  buyer      User       @relation("BuyerCart", fields: [buyer_id], references: [user_id])
+  items      CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  cart_item_id String   @id @default(uuid())
+  cart_id      String
+  listing_id   String
+  quantity     Int      @default(1)
+  added_at     DateTime @default(now())
+  cart         Cart     @relation(fields: [cart_id], references: [cart_id], onDelete: Cascade)
+  listing      Listing  @relation(fields: [listing_id], references: [listing_id])
+
+  @@unique([cart_id, listing_id])
+  @@map("cart_items")
 }
 
 enum RoleName {
