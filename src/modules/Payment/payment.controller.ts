@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request } from 'express';
 import { PaymentService } from './payment.service';
 import { CreatePaymentLinkDto } from './dtos/create-payment-link.dto';
+import { CreatePaymentLinkForOrderDto } from './dtos/create-payment-link-for-order.dto';
 import { CancelPaymentDto } from './dtos/cancel-payment.dto';
 import { PaymentWebhookDto } from './dtos/payment-webhook.dto';
 import { Public } from 'src/common/decorators/public.decorator';
@@ -38,6 +39,19 @@ export class PaymentController {
       createPaymentLinkDto.listingId,
       buyerId,
     );
+  }
+
+  @Post('create-for-order')
+  @ApiOperation({ summary: 'Tạo payment link cho order (nhiều items)' })
+  @ApiResponse({ status: 201, description: 'Payment link được tạo thành công' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiResponse({ status: 404, description: 'Order không tồn tại' })
+  async createPaymentForOrder(
+    @Body() dto: CreatePaymentLinkForOrderDto,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    const buyerId = req.user.user_id;
+    return this.paymentService.createPaymentLinkForOrder(dto.orderId, buyerId);
   }
 
   @Get('info/:orderCode')
@@ -66,7 +80,7 @@ export class PaymentController {
   @ApiResponse({ status: 200, description: 'Webhook xác thực thành công' })
   async handleWebhook(@Body() webhookData: PaymentWebhookDto) {
     // Xác thực webhook
-    const result = await this.paymentService.verifyWebhook(webhookData);
+    const result = await this.paymentService.handleWebhook(webhookData);
 
     if (!result.success) {
       return {
