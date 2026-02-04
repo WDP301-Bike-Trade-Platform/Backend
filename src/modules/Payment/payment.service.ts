@@ -16,10 +16,10 @@ export class PaymentService {
     @Inject(forwardRef(() => OrderService))
     private orderService: OrderService,
   ) {
-    // Sử dụng deep link cho mobile app
-    // Development (Expo Go): exp://192.168.x.x:19000/--/
-    // Production: myapp:// (custom scheme)
-    this.FRONTEND_URL = this.configService.get<string>('FRONTEND_URL') || 'myapp://';
+    // Deep link scheme cho mobile app
+    // Development: biketrade:// (hoạt động với Expo Go và dev build)
+    // Production: biketrade:// (custom scheme đã config trong app.json)
+    this.FRONTEND_URL = this.configService.get<string>('FRONTEND_URL') || 'biketrade://';
     this.payos = new PayOS({
       clientId: this.configService.get<string>('PAYOS_CLIENT_ID') || '',
       apiKey: this.configService.get<string>('PAYOS_API_KEY') || '',
