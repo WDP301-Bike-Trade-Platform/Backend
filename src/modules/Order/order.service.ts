@@ -556,7 +556,7 @@ export class OrderService {
     // Cập nhật listing về ACTIVE
     await this.prisma.listing.update({
       where: { listing_id: order.listing_id },
-      data: { status: 'ACTIVE' },
+      data: { status: 'APPROVED' },
     });
 
     // Tạo notification cho seller
