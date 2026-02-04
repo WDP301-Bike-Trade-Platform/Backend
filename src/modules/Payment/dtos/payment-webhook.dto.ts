@@ -3,31 +3,31 @@ import { IsString, IsObject, IsNumber, IsOptional, ValidateNested } from 'class-
 import { Type } from 'class-transformer';
 
 class WebhookDataDto {
-  @ApiProperty({ example: 123 })
+  @ApiProperty()
   @IsNumber()
   orderCode: number;
 
-  @ApiProperty({ example: 3000 })
+  @ApiProperty()
   @IsNumber()
   amount: number;
 
-  @ApiProperty({ example: 'VQRIO123' })
+  @ApiProperty()
   @IsString()
   description: string;
 
-  @ApiProperty({ example: '12345678' })
+  @ApiProperty()
   @IsString()
   accountNumber: string;
 
-  @ApiProperty({ example: 'TF230204212323' })
+  @ApiProperty()
   @IsString()
   reference: string;
 
-  @ApiProperty({ example: '2023-02-04 18:25:00' })
+  @ApiProperty()
   @IsString()
   transactionDateTime: string;
 
-  @ApiProperty({ example: '124c33293c43417ab7879e14c8d9eb18' })
+  @ApiProperty()
   @IsString()
   paymentLinkId: string;
 
@@ -35,9 +35,10 @@ class WebhookDataDto {
   @IsString()
   code: string;
 
-  @ApiProperty({ example: 'Thành công' })
+  @ApiProperty({ required: false })
   @IsString()
-  desc: string;
+  @IsOptional()
+  desc?: string;
 
   @ApiProperty({ example: '', required: false })
   @IsString()
@@ -69,19 +70,24 @@ class WebhookDataDto {
   @IsOptional()
   virtualAccountNumber?: string;
 
-  @ApiProperty({ example: 'VND' })
+  @ApiProperty({ })
   @IsString()
   currency: string;
 }
 
 export class PaymentWebhookDto {
-  @ApiProperty({ example: '00' })
+  @ApiProperty({})
   @IsString()
   code: string;
 
-  @ApiProperty({ example: 'success' })
+  @ApiProperty({ required: false })
   @IsString()
-  desc: string;
+  @IsOptional()
+  desc?: string;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  success?: boolean;
 
   @ApiProperty({ type: WebhookDataDto })
   @IsObject()
@@ -89,7 +95,7 @@ export class PaymentWebhookDto {
   @Type(() => WebhookDataDto)
   data: WebhookDataDto;
 
-  @ApiProperty({ example: '4a236c5a76e0df5f1502b18e7b7488b9b0598f5ba1089a2b2db318c6a71857e4' })
+  @ApiProperty()
   @IsString()
   signature: string;
 }

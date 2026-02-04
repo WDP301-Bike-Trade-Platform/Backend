@@ -51,7 +51,15 @@ export class UserService {
 
     return {
       ok: true,
-      data: user,
+      data: {
+        ...user,
+        created_at: user.created_at?.toISOString(),
+        profile: user.profile ? {
+          ...user.profile,
+          dob: user.profile.dob?.toISOString(),
+          created_at: user.profile.created_at?.toISOString(),
+        } : null,
+      },
     };
   }
 
@@ -93,16 +101,18 @@ export class UserService {
     let updatedProfile;
     if (user.profile) {
       // Cập nhật profile hiện có
+      const updateData: any = {};
+      
+      if (dto.dob !== undefined) updateData.dob = dto.dob ? new Date(dto.dob) : null;
+      if (dto.gender !== undefined) updateData.gender = dto.gender;
+      if (dto.national_id !== undefined) updateData.national_id = dto.national_id;
+      if (dto.bank_account !== undefined) updateData.bank_account = dto.bank_account;
+      if (dto.bank_name !== undefined) updateData.bank_name = dto.bank_name;
+      if (dto.avatar_url !== undefined) updateData.avatar_url = dto.avatar_url;
+
       updatedProfile = await this.prisma.userProfile.update({
         where: { profile_id: user.profile.profile_id },
-        data: {
-          ...(dto.dob && { dob: new Date(dto.dob) }),
-          ...(dto.gender && { gender: dto.gender }),
-          ...(dto.national_id && { national_id: dto.national_id }),
-          ...(dto.bank_account && { bank_account: dto.bank_account }),
-          ...(dto.bank_name && { bank_name: dto.bank_name }),
-          ...(dto.avatar_url && { avatar_url: dto.avatar_url }),
-        },
+        data: updateData,
       });
     } else {
       // Tạo mới profile nếu chưa có
@@ -125,7 +135,12 @@ export class UserService {
       message: 'Cập nhật profile thành công',
       data: {
         ...updatedUser,
-        profile: updatedProfile,
+        created_at: updatedUser.created_at?.toISOString(),
+        profile: {
+          ...updatedProfile,
+          dob: updatedProfile.dob?.toISOString(),
+          created_at: updatedProfile.created_at?.toISOString(),
+        },
       },
     };
   }
