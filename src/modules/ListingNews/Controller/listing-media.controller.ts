@@ -20,7 +20,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(1)
-@Controller('listings/:listingId/media')
+@Controller('listingMedia/')
 export class ListingMediaController {
   constructor(private readonly mediaService: ListingMediaService) {}
 
