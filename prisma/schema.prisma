@@ -15,34 +15,9 @@ model Role {
 
   @@map("roles")
 }
-enum BikeType {
-  ROAD
-  MTB
-  FIXED
-  GRAVEL
-  FOLDING
-}
-
-enum FrameMaterial {
-  CARBON
-  ALUMINUM
-  STEEL
-}
-
-enum BrakeType {
-  DISC
-  RIM
-}
-
 enum VehicleCondition {
   NEW
   USED
-}
-
-enum UsageLevel {
-  LIGHT
-  MEDIUM
-  HEAVY
 }
 
 model User {
@@ -68,6 +43,7 @@ model User {
   otps             Otp[]
   paymentDeposits  PaymentDeposit[]
   reports          Report[]
+  transfers        Transfer[]
   reviewAsBuyer    Review[]         @relation("ReviewBuyer")
   reviewsGiven     Review[]         @relation("Reviewer")
   reviewAsSeller   Review[]         @relation("ReviewSeller")
@@ -96,6 +72,7 @@ model UserProfile {
   national_id  String?
   bank_account String?
   bank_name    String?
+  bank_bin     String?
   avatar_url   String?
   created_at   DateTime
   user         User      @relation(fields: [user_id], references: [user_id])
@@ -120,13 +97,13 @@ model Vehicle {
   year          Int
   price         Decimal
 
-  bike_type     BikeType        // road, mtb, fixed, gravel...
-  material      FrameMaterial   // carbon, aluminum...
-  brake_type    BrakeType       // disc, rim
+  bike_type     String          // road, mtb, fixed, gravel...
+  material      String          // carbon, aluminum...
+  brake_type    String          // disc, rim
   wheel_size    String?         // 700c, 29, 27.5
 
   condition     VehicleCondition
-  usage_level   UsageLevel?     // NEW, LIGHT, HEAVY
+  usage_level   String?         // NEW, LIGHT, HEAVY
   mileage_km    Int?            // optional
 
   groupset      String?         // Shimano 105, SRAM Rival...
@@ -280,6 +257,45 @@ model PaymentDeposit {
   payment    Payment  @relation(fields: [payment_id], references: [payment_id])
 
   @@map("payment_deposits")
+}
+
+model Transfer {
+  transfer_id   String   @id @default(uuid())
+  reference_id  String   @unique
+  payout_id     String?
+  user_id       String?
+  total_credit  Decimal?
+  category      Json?
+  approval_state String  @default("DRAFTING")
+  created_at    DateTime @default(now())
+  updated_at    DateTime? @updatedAt
+
+  user         User?                  @relation(fields: [user_id], references: [user_id])
+  transactions TransferTransaction[]
+
+  @@map("transfers")
+}
+
+model TransferTransaction {
+  transfer_transaction_id String   @id @default(uuid())
+  transfer_id             String
+  reference_id            String   @unique
+  payout_transaction_id   String?
+  amount                  Decimal
+  description             String
+  to_bin                  String
+  to_account_number       String
+  to_account_name         String?
+  reference               String?
+  transaction_datetime    DateTime?
+  error_message           String?
+  error_code              String?
+  state                   String
+  created_at              DateTime @default(now())
+
+  transfer Transfer @relation(fields: [transfer_id], references: [transfer_id], onDelete: Cascade)
+
+  @@map("transfer_transactions")
 }
 
 model Message {

@@ -9,6 +9,14 @@ export class CreateListingService {
 
   async createListing(dto: CreateListingDto, sellerId: string) {
     return this.prisma.$transaction(async (tx) => {
+      const sanitizeOptional = (value?: string | null) => {
+        if (value === undefined || value === null) {
+          return undefined;
+        }
+        const trimmed = value.trim();
+        return trimmed.length ? trimmed : undefined;
+      };
+
       // 🚫 0️⃣ CHECK: user có listing đang chờ duyệt không
       const pendingListing = await tx.listing.findFirst({
         where: {
@@ -27,7 +35,7 @@ export class CreateListingService {
       }
 
       // 1️⃣ Category fallback = "Khác"
-      let categoryId = dto.category_id;
+      let categoryId = sanitizeOptional(dto.category_id);
 
       if (!categoryId) {
         const otherCategory = await tx.category.findFirst({
@@ -41,6 +49,10 @@ export class CreateListingService {
         categoryId = otherCategory.category_id;
       }
 
+      if (!categoryId) {
+        throw new BadRequestException('Không xác định được category hợp lệ');
+      }
+
       // 2️⃣ Tạo Vehicle
       const vehicle = await tx.vehicle.create({
         data: {
@@ -51,23 +63,23 @@ export class CreateListingService {
           year: dto.year,
           price: dto.price,
 
-          bike_type: dto.bike_type,
-          material: dto.material,
-          brake_type: dto.brake_type,
-          wheel_size: dto.wheel_size,
+          bike_type: dto.bike_type.trim(),
+          material: dto.material.trim(),
+          brake_type: dto.brake_type.trim(),
+          wheel_size: sanitizeOptional(dto.wheel_size),
 
           condition: 'USED',
-          usage_level: dto.usage_level,
+          usage_level: sanitizeOptional(dto.usage_level),
           mileage_km: dto.mileage_km,
 
-          groupset: dto.groupset,
-          frame_size: dto.frame_size,
+          groupset: sanitizeOptional(dto.groupset),
+          frame_size: sanitizeOptional(dto.frame_size),
 
           is_original: dto.is_original ?? true,
           has_receipt: dto.has_receipt ?? false,
-          frame_serial: dto.frame_serial,
+          frame_serial: sanitizeOptional(dto.frame_serial),
 
-          description: dto.description,
+          description: sanitizeOptional(dto.description),
         },
       });
 
@@ -88,7 +100,7 @@ export class CreateListingService {
         data: dto.images.map((url) => ({
           listing_id: listing.listing_id,
           type: MediaType.IMAGE,
-          file_url: url,
+          file_url: url.trim(),
           mime_type: 'image/jpeg',
           size_bytes: BigInt(0), // mock cho đồ án
           uploaded_at: new Date(),

@@ -7,6 +7,84 @@ import {
 import { PrismaService } from 'src/database/prisma.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { ListingStatus, OrderStatus, Prisma } from '@prisma/client';
+
+const CART_ITEM_INCLUDE = {
+  listing: {
+    include: {
+      vehicle: true,
+      seller: {
+        select: {
+          user_id: true,
+          full_name: true,
+          email: true,
+        },
+      },
+    },
+  },
+} as const;
+
+const CART_WITH_ITEMS = {
+  include: {
+    items: {
+      include: CART_ITEM_INCLUDE,
+    },
+  },
+} as const;
+
+type CartItemWithRelations = Prisma.CartItemGetPayload<{
+  include: typeof CART_ITEM_INCLUDE;
+}>;
+
+type CartWithRelations = Prisma.CartGetPayload<typeof CART_WITH_ITEMS>;
+
+type CartListing = NonNullable<CartItemWithRelations['listing']>;
+type CartSeller = CartListing['seller'];
+
+interface CartItemView {
+  cartItemId: string;
+  listingId: string;
+  vehicleId: string | null;
+  sellerId: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  listing: CartItemWithRelations['listing'];
+  seller?: CartSeller | null;
+  isValid: boolean;
+  error?: string;
+}
+
+interface CartSellerGroup {
+  sellerId: string | null;
+  sellerName: string | null;
+  sellerEmail: string | null;
+  subtotal: number;
+  items: CartItemView[];
+}
+
+interface CartValidationError {
+  cartItemId: string;
+  listingId: string;
+  message: string;
+}
+
+interface CartValidationResult {
+  cart: CartWithRelations;
+  items: CartItemView[];
+  errors: CartValidationError[];
+}
+
+const AVAILABLE_LISTING_STATUSES = new Set<ListingStatus>([
+  ListingStatus.ACTIVE,
+  ListingStatus.APPROVED,
+]);
+
+const BLOCKING_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.PENDING,
+  OrderStatus.CONFIRMED,
+  OrderStatus.DEPOSITED,
+];
 
 @Injectable()
 export class CartService {
@@ -18,177 +96,102 @@ export class CartService {
   async addToCart(buyerId: string, addToCartDto: AddToCartDto) {
     const { listingId, quantity = 1 } = addToCartDto;
 
-    // Kiểm tra listing tồn tại và còn available
+    if (quantity > 1) {
+      throw new BadRequestException('Only one quantity is allowed per listing');
+    }
+
     const listing = await this.prisma.listing.findUnique({
       where: { listing_id: listingId },
-      include: {
-        vehicle: true,
-      },
+      include: CART_ITEM_INCLUDE.listing.include,
     });
 
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
 
-    if (listing.status !== 'APPROVED' && listing.status !== 'ACTIVE') {
+    if (!this.isListingAvailable(listing)) {
       throw new BadRequestException('This listing is not available');
     }
 
-    // Người bán không thể thêm sản phẩm của chính mình vào giỏ hàng
     if (listing.seller_id === buyerId) {
       throw new BadRequestException('You cannot add your own listing to cart');
     }
 
-    // Tìm hoặc tạo giỏ hàng cho buyer
-    let cart = await this.prisma.cart.findUnique({
-      where: { buyer_id: buyerId },
-      include: {
-        items: {
-          include: {
-            listing: {
-              include: {
-                vehicle: true,
-              },
-            },
-          },
-        },
+    const hasBlockingOrder = await this.prisma.order.findFirst({
+      where: {
+        listing_id: listingId,
+        status: { in: BLOCKING_ORDER_STATUSES },
+      },
+      select: { order_id: true },
+    });
+
+    if (hasBlockingOrder) {
+      throw new ConflictException('This listing already has an active order');
+    }
+
+    const cart = await this.ensureCartRecord(buyerId);
+
+    const existingItem = await this.prisma.cartItem.findFirst({
+      where: {
+        cart_id: cart.cart_id,
+        listing_id: listingId,
       },
     });
 
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: {
-          buyer_id: buyerId,
-        },
-        include: {
-          items: {
-            include: {
-              listing: {
-                include: {
-                  vehicle: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    }
-
-    // Kiểm tra xem item đã có trong giỏ hàng chưa
-    const existingItem = cart.items.find(
-      (item) => item.listing_id === listingId,
-    );
-
     if (existingItem) {
-      // Cập nhật số lượng (xe đạp thường quantity = 1, nhưng có thể có nhiều)
-      const updatedItem = await this.prisma.cartItem.update({
-        where: { cart_item_id: existingItem.cart_item_id },
-        data: {
-          quantity: existingItem.quantity + quantity,
-        },
-        include: {
-          listing: {
-            include: {
-              vehicle: true,
-            },
-          },
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Cart item quantity updated',
-        data: updatedItem,
-      };
-    } else {
-      // Thêm item mới vào giỏ hàng
-      const newItem = await this.prisma.cartItem.create({
-        data: {
-          cart_id: cart.cart_id,
-          listing_id: listingId,
-          quantity: quantity,
-        },
-        include: {
-          listing: {
-            include: {
-              vehicle: true,
-            },
-          },
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Item added to cart successfully',
-        data: newItem,
-      };
+      throw new ConflictException('This listing is already in your cart');
     }
+
+    const newItem = await this.prisma.cartItem.create({
+      data: {
+        cart_id: cart.cart_id,
+        listing_id: listingId,
+        quantity: 1,
+      },
+      include: CART_ITEM_INCLUDE,
+    });
+
+    const payload = this.mapCartItem(newItem);
+
+    return {
+      success: true,
+      message: 'Item added to cart successfully',
+      data: payload,
+    };
   }
 
   /**
    * Lấy giỏ hàng của buyer
    */
   async getMyCart(buyerId: string) {
-    let cart = await this.prisma.cart.findUnique({
-      where: { buyer_id: buyerId },
-      include: {
-        items: {
-          include: {
-            listing: {
-              include: {
-                vehicle: true,
-                seller: {
-                  select: {
-                    user_id: true,
-                    full_name: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
+    const validation = await this.buildValidatedCart(buyerId);
+    const validItems = validation.items.filter((item) => item.isValid);
+    const totalAmount = validItems.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0,
+    );
 
-    // Nếu chưa có giỏ hàng, tạo mới
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: {
-          buyer_id: buyerId,
-        },
-        include: {
-          items: {
-            include: {
-              listing: {
-                include: {
-                  vehicle: true,
-                  seller: {
-                    select: {
-                      user_id: true,
-                      full_name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-    }
-
-    // Tính tổng tiền
-    const totalAmount = cart.items.reduce((sum, item) => {
-      return sum + Number(item.listing.vehicle.price) * item.quantity;
-    }, 0);
+    const cartResponse = {
+      ...validation.cart,
+      items: validation.cart.items.map((cartItem, index) => ({
+        ...cartItem,
+        validationStatus: validation.items[index]?.isValid ? 'VALID' : 'INVALID',
+        validationError: validation.items[index]?.error ?? null,
+      })),
+    };
 
     return {
       success: true,
       data: {
-        cart,
+        cart: cartResponse,
         totalAmount,
-        itemCount: cart.items.length,
+        itemCount: validation.items.length,
+        validItemCount: validItems.length,
+        invalidItemCount: validation.errors.length,
+        hasInvalidItems: validation.errors.length > 0,
+        validationErrors: validation.errors,
+        groups: this.groupItemsBySeller(validation.items),
+        items: validation.items,
       },
     };
   }
@@ -206,6 +209,7 @@ export class CartService {
       where: { cart_item_id: cartItemId },
       include: {
         cart: true,
+        listing: true,
       },
     });
 
@@ -215,6 +219,14 @@ export class CartService {
 
     if (cartItem.cart.buyer_id !== buyerId) {
       throw new BadRequestException('This cart item does not belong to you');
+    }
+
+    if (cartItem.listing && !this.isListingAvailable(cartItem.listing)) {
+      throw new BadRequestException('This listing is no longer available');
+    }
+
+    if (updateDto.quantity > 1) {
+      throw new BadRequestException('Only one quantity is allowed per listing');
     }
 
     // Cập nhật số lượng
@@ -227,6 +239,13 @@ export class CartService {
         listing: {
           include: {
             vehicle: true,
+            seller: {
+              select: {
+                user_id: true,
+                full_name: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -279,10 +298,12 @@ export class CartService {
     });
 
     if (!cart) {
-      throw new NotFoundException('Cart not found');
+      return {
+        success: true,
+        message: 'Cart cleared successfully',
+      };
     }
 
-    // Xóa tất cả items
     await this.prisma.cartItem.deleteMany({
       where: { cart_id: cart.cart_id },
     });
@@ -296,77 +317,173 @@ export class CartService {
   /**
    * Kiểm tra tính khả dụng của các items trong giỏ hàng trước khi checkout
    */
-  async validateCartForCheckout(buyerId: string) {
-    const cart = await this.prisma.cart.findUnique({
-      where: { buyer_id: buyerId },
-      include: {
-        items: {
-          include: {
-            listing: {
-              include: {
-                vehicle: true,
-              },
-            },
-          },
-        },
-      },
-    });
+  async getCartForOrder(buyerId: string) {
+    const validation = await this.buildValidatedCart(buyerId);
 
-    if (!cart || cart.items.length === 0) {
+    if (validation.items.length === 0) {
       throw new BadRequestException('Your cart is empty');
     }
 
-    const unavailableItems: string[] = [];
-    const validItems: typeof cart.items = [];
-
-    for (const item of cart.items) {
-      if (
-        item.listing.status !== 'APPROVED' &&
-        item.listing.status !== 'ACTIVE'
-      ) {
-        unavailableItems.push(
-          `${item.listing.vehicle.brand} ${item.listing.vehicle.model}`,
-        );
-      } else {
-        validItems.push(item);
-      }
+    if (validation.errors.length > 0) {
+      throw new BadRequestException({
+        message: 'Cart contains invalid items',
+        errors: validation.errors,
+      });
     }
 
-    if (unavailableItems.length > 0) {
-      throw new BadRequestException(
-        `The following items are no longer available: ${unavailableItems.join(', ')}`,
-      );
-    }
+    const totalAmount = validation.items.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0,
+    );
 
     return {
-      cart,
-      validItems,
-    };
-  }
-
-  /**
-   * Lấy thông tin giỏ hàng để tạo order (không tạo order thực sự, chỉ trả về data)
-   */
-  async getCartForOrder(buyerId: string) {
-    const { cart, validItems } = await this.validateCartForCheckout(buyerId);
-
-    // Tính tổng tiền
-    const totalAmount = validItems.reduce((sum, item) => {
-      return sum + Number(item.listing.vehicle.price) * item.quantity;
-    }, 0);
-
-    return {
-      cartId: cart.cart_id,
-      items: validItems.map((item) => ({
-        cartItemId: item.cart_item_id,
-        listingId: item.listing_id,
-        vehicleId: item.listing.vehicle_id,
+      cartId: validation.cart.cart_id,
+      items: validation.items.map((item) => ({
+        cartItemId: item.cartItemId,
+        listingId: item.listingId,
+        vehicleId: item.vehicleId as string,
         quantity: item.quantity,
-        unitPrice: item.listing.vehicle.price,
-        totalPrice: Number(item.listing.vehicle.price) * item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
         listing: item.listing,
       })),
       totalAmount,
+      groupedBySeller: this.groupItemsBySeller(validation.items),
     };
+  }
+
+  private async ensureCartRecord(buyerId: string) {
+    let cart = await this.prisma.cart.findUnique({
+      where: { buyer_id: buyerId },
+    });
+
+    if (!cart) {
+      cart = await this.prisma.cart.create({
+        data: { buyer_id: buyerId },
+      });
+    }
+
+    return cart;
+  }
+
+  private async ensureCartWithItems(buyerId: string): Promise<CartWithRelations> {
+    const cart = await this.prisma.cart.findUnique({
+      where: { buyer_id: buyerId },
+      include: CART_WITH_ITEMS.include,
+    });
+
+    if (cart) {
+      return cart;
+    }
+
+    return this.prisma.cart.create({
+      data: { buyer_id: buyerId },
+      include: CART_WITH_ITEMS.include,
+    });
+  }
+
+  private async buildValidatedCart(
+    buyerId: string,
+  ): Promise<CartValidationResult> {
+    const cart = await this.ensureCartWithItems(buyerId);
+
+    if (cart.items.length === 0) {
+      return { cart, items: [], errors: [] };
+    }
+
+    const listingIds = cart.items.map((item) => item.listing_id);
+    const blockingOrders = await this.prisma.order.findMany({
+      where: {
+        listing_id: { in: listingIds },
+        status: { in: BLOCKING_ORDER_STATUSES },
+      },
+      select: { listing_id: true },
+    });
+    const busyListings = new Set(blockingOrders.map((order) => order.listing_id));
+
+    const items = cart.items.map((item) => {
+      let error: string | undefined;
+
+      if (!item.listing) {
+        error = 'Listing not found';
+      } else if (!this.isListingAvailable(item.listing)) {
+        error = 'Listing is not available for purchase';
+      } else if (item.listing.seller_id === buyerId) {
+        error = 'You cannot buy your own listing';
+      } else if (busyListings.has(item.listing.listing_id)) {
+        error = 'Listing already has an active order';
+      } else if (item.quantity !== 1) {
+        error = 'Only one quantity is allowed for each listing';
+      }
+
+      return this.mapCartItem(item, error);
+    });
+
+    const errors = items
+      .filter((item) => !item.isValid && item.error)
+      .map((item) => ({
+        cartItemId: item.cartItemId,
+        listingId: item.listingId,
+        message: item.error!,
+      }));
+
+    return { cart, items, errors };
+  }
+
+  private mapCartItem(
+    cartItem: CartItemWithRelations,
+    error?: string,
+  ): CartItemView {
+    const listing = cartItem.listing;
+    const seller = listing?.seller ?? null;
+    const unitPrice = listing?.vehicle
+      ? Number(listing.vehicle.price)
+      : 0;
+
+    return {
+      cartItemId: cartItem.cart_item_id,
+      listingId: cartItem.listing_id,
+      vehicleId: listing?.vehicle_id ?? null,
+      sellerId: listing?.seller_id ?? null,
+      quantity: cartItem.quantity,
+      unitPrice,
+      totalPrice: unitPrice * cartItem.quantity,
+      listing,
+      seller,
+      isValid: !error,
+      error,
+    };
+  }
+
+  private groupItemsBySeller(items: CartItemView[]): CartSellerGroup[] {
+    const groups = new Map<string | null, CartSellerGroup>();
+
+    for (const item of items) {
+      const key = item.sellerId ?? null;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          sellerId: key,
+          sellerName: item.seller?.full_name ?? null,
+          sellerEmail: item.seller?.email ?? null,
+          subtotal: 0,
+          items: [],
+        });
+      }
+
+      const group = groups.get(key)!;
+      group.items.push(item);
+      if (item.isValid) {
+        group.subtotal += item.totalPrice;
+      }
+    }
+
+    return Array.from(groups.values());
+  }
+
+  private isListingAvailable(listing?: CartListing | null) {
+    if (!listing) {
+      return false;
+    }
+    return AVAILABLE_LISTING_STATUSES.has(listing.status);
   }
 }

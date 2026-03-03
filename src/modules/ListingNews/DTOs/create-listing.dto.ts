@@ -1,7 +1,6 @@
 import {
   IsArray,
   IsBoolean,
-  IsEnum,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -11,7 +10,6 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BikeType, BrakeType, FrameMaterial, UsageLevel } from '@prisma/client';
 
 export class CreateListingDto {
   // ===== Category =====
@@ -41,27 +39,30 @@ export class CreateListingDto {
   price: number;
 
   // ===== Bike-specific =====
-  @ApiProperty({ enum: BikeType })
-  @IsEnum(BikeType)
-  bike_type: BikeType;
+  @ApiProperty({ example: 'Xe đạp road / fixed / custom' })
+  @IsString()
+  @IsNotEmpty()
+  bike_type: string;
 
-  @ApiProperty({ enum: FrameMaterial })
-  @IsEnum(FrameMaterial)
-  material: FrameMaterial;
+  @ApiProperty({ example: 'Carbon, Aluminum, Thép hoặc tuỳ chọn' })
+  @IsString()
+  @IsNotEmpty()
+  material: string;
 
-  @ApiProperty({ enum: BrakeType })
-  @IsEnum(BrakeType)
-  brake_type: BrakeType;
+  @ApiProperty({ example: 'Disc, Rim, Hydraulic...' })
+  @IsString()
+  @IsNotEmpty()
+  brake_type: string;
 
   @ApiPropertyOptional({ example: '700c' })
   @IsOptional()
   @IsString()
   wheel_size?: string;
 
-  @ApiPropertyOptional({ enum: UsageLevel })
+  @ApiPropertyOptional({ example: 'Light, Medium, Heavy, Custom' })
   @IsOptional()
-  @IsEnum(UsageLevel)
-  usage_level?: UsageLevel;
+  @IsString()
+  usage_level?: string;
 
   @ApiPropertyOptional({ example: 1200 })
   @IsOptional()

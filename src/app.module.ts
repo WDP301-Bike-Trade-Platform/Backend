@@ -8,6 +8,7 @@ import { PaymentModule } from './modules/Payment/payment.module';
 import { OrderModule } from './modules/Order/order.module';
 import { CartModule } from './modules/Cart/cart.module';
 import { AddressModule } from './modules/Address/address.module';
+import { TransferModule } from './modules/Transfer/transfer.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -24,6 +25,7 @@ import { ConfigModule } from '@nestjs/config';
     OrderModule,
     CartModule,
     AddressModule,
+    TransferModule,
   ],
 })
 export class AppModule {}
