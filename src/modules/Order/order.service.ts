@@ -160,6 +160,9 @@ export class OrderService {
     // Nhóm items theo seller (mỗi seller tạo 1 order riêng)
     const itemsBySeller = cartData.items.reduce(
       (acc, item) => {
+        if (!item.listing || !item.listing.seller_id) {
+          throw new BadRequestException('Listing information is not available');
+        }
         const sellerId = item.listing.seller_id;
         if (!acc[sellerId]) {
           acc[sellerId] = [];

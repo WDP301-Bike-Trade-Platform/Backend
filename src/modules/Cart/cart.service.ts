@@ -9,18 +9,20 @@ import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { ListingStatus, OrderStatus, Prisma } from '@prisma/client';
 
+const LISTING_RELATIONS = {
+  vehicle: true,
+  seller: {
+    select: {
+      user_id: true,
+      full_name: true,
+      email: true,
+    },
+  },
+} as const;
+
 const CART_ITEM_INCLUDE = {
   listing: {
-    include: {
-      vehicle: true,
-      seller: {
-        select: {
-          user_id: true,
-          full_name: true,
-          email: true,
-        },
-      },
-    },
+    include: LISTING_RELATIONS,
   },
 } as const;
 
@@ -38,10 +40,13 @@ type CartItemWithRelations = Prisma.CartItemGetPayload<{
 
 type CartWithRelations = Prisma.CartGetPayload<typeof CART_WITH_ITEMS>;
 
-type CartListing = NonNullable<CartItemWithRelations['listing']>;
-type CartSeller = CartListing['seller'];
+export type ListingWithRelations = Prisma.ListingGetPayload<{
+  include: typeof LISTING_RELATIONS;
+}>;
 
-interface CartItemView {
+type CartListing = ListingWithRelations | null;
+
+export interface CartItemView {
   cartItemId: string;
   listingId: string;
   vehicleId: string | null;
@@ -49,13 +54,13 @@ interface CartItemView {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  listing: CartItemWithRelations['listing'];
-  seller?: CartSeller | null;
+  listing: ListingWithRelations | null;
+  seller?: ListingWithRelations['seller'] | null;
   isValid: boolean;
   error?: string;
 }
 
-interface CartSellerGroup {
+export interface CartSellerGroup {
   sellerId: string | null;
   sellerName: string | null;
   sellerEmail: string | null;
@@ -63,7 +68,7 @@ interface CartSellerGroup {
   items: CartItemView[];
 }
 
-interface CartValidationError {
+export interface CartValidationError {
   cartItemId: string;
   listingId: string;
   message: string;
@@ -209,7 +214,9 @@ export class CartService {
       where: { cart_item_id: cartItemId },
       include: {
         cart: true,
-        listing: true,
+        listing: {
+          include: LISTING_RELATIONS,
+        },
       },
     });
 
@@ -237,16 +244,7 @@ export class CartService {
       },
       include: {
         listing: {
-          include: {
-            vehicle: true,
-            seller: {
-              select: {
-                user_id: true,
-                full_name: true,
-                email: true,
-              },
-            },
-          },
+          include: LISTING_RELATIONS,
         },
       },
     });

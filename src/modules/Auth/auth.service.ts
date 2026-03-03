@@ -31,6 +31,8 @@ export class AuthService {
     const hashed = await bcrypt.hash(dto.password, 10);
 
     try {
+      /*
+      // ==== OTP-BASED REGISTRATION (disabled for Render deployment) ====
       const user = await this.prisma.user.create({
         data: {
           full_name: dto.full_name,
@@ -58,6 +60,26 @@ export class AuthService {
       return {
         ok: true,
         message: 'OTP đã gửi. Vui lòng xác nhận tài khoản.',
+      };
+      */
+
+      // ==== SIMPLIFIED REGISTRATION (no OTP) ====
+      await this.prisma.user.create({
+        data: {
+          full_name: dto.full_name,
+          email,
+          phone: dto.phone.trim(),
+          password: hashed,
+          role_id: 1,
+          is_verified: true,
+          created_at: new Date(),
+          ip_address: null,
+        },
+      });
+
+      return {
+        ok: true,
+        message: 'Đăng ký thành công, tài khoản đã được kích hoạt.',
       };
     } catch (error: unknown) {
       if (
