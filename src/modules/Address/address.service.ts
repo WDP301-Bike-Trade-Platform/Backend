@@ -53,7 +53,7 @@ export class AddressService {
 
     return {
       success: true,
-      message: 'Address created successfully',
+      message: 'Địa chỉ đã được tạo thành công',
       data: address,
     };
   }
@@ -172,7 +172,7 @@ export class AddressService {
 
     return {
       success: true,
-      message: 'Address updated successfully',
+      message: 'Địa chỉ đã được cập nhật thành công',
       data: updatedAddress,
     };
   }
@@ -215,7 +215,7 @@ export class AddressService {
 
     return {
       success: true,
-      message: 'Address set as default successfully',
+      message: 'Địa chỉ đã được đặt làm mặc định thành công',
       data: updatedAddress,
     };
   }
@@ -259,7 +259,7 @@ export class AddressService {
 
     return {
       success: true,
-      message: 'Address deleted successfully',
+      message: 'Địa chỉ đã được xóa thành công',
     };
   }
 }

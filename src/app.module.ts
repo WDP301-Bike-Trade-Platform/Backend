@@ -9,6 +9,7 @@ import { OrderModule } from './modules/Order/order.module';
 import { CartModule } from './modules/Cart/cart.module';
 import { AddressModule } from './modules/Address/address.module';
 import { TransferModule } from './modules/Transfer/transfer.module';
+import { NotificationModule } from './modules/Notification/notification.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -26,6 +27,7 @@ import { ConfigModule } from '@nestjs/config';
     CartModule,
     AddressModule,
     TransferModule,
+    NotificationModule,
   ],
 })
 export class AppModule {}

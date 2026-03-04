@@ -137,11 +137,11 @@ export class OrderController {
   }
 
   @Patch(':id/complete')
-  @Roles(1) // SELLER
-  @ApiOperation({ summary: 'Seller hoàn thành đơn hàng' })
+  @Roles(1) // BUYER
+  @ApiOperation({ summary: 'Buyer xác nhận hoàn thành đơn hàng' })
   @ApiResponse({ status: 200, description: 'Hoàn thành order thành công' })
   @ApiResponse({ status: 400, description: 'Không thể hoàn thành order này' })
-  @ApiResponse({ status: 403, description: 'Không phải seller' })
+  @ApiResponse({ status: 403, description: 'Không phải buyer' })
   async completeOrder(
     @Param('id') id: string,
     @Req() req: Request & { user: JwtUser },

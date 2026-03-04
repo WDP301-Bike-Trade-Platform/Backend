@@ -3,6 +3,8 @@ import { PayOS } from '@payos/node';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/database/prisma.service';
 import { OrderService } from '../Order/order.service';
+import { CreateOrderDto } from '../Order/dto/create-order.dto';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 
 
 @Injectable()
@@ -35,78 +37,37 @@ export class PaymentService {
     buyerId: string,
   ) {
     try {
-      // Lấy thông tin listing và vehicle
-      const listing = await this.prisma.listing.findUnique({
-        where: { listing_id: listingId },
-        include: {
-          vehicle: true,
-        },
-      });
+      const orderPayload = {
+        listingId,
+        paymentMethod: 'PAYOS',
+      } as CreateOrderDto;
 
-      if (!listing) {
-        throw new NotFoundException('Listing not found');
+      const orderResult = await this.orderService.createOrder(
+        buyerId,
+        orderPayload,
+      );
+
+      const order = orderResult.data;
+      if (!order) {
+        throw new BadRequestException('Cannot create order for listing');
       }
 
-      if (listing.status !== 'APPROVED' && listing.status !== 'ACTIVE') {
-        throw new BadRequestException('Listing is not available for purchase');
-      }
-
-      if (listing.seller_id === buyerId) {
-        throw new BadRequestException('Cannot buy your own listing');
-      }
-
-      // Tạo order trước để user có thể tracking
-      const order = await this.prisma.order.create({
-        data: {
-          buyer_id: buyerId,
-          listing_id: listingId,
-          deposit_amount: listing.vehicle.price,
-          status: 'PENDING',
-          created_at: new Date(),
-        },
-      });
-
-      // Tạo order detail
-      await this.prisma.orderDetail.create({
-        data: {
-          order_id: order.order_id,
-          listing_id: listingId,
-          vehicle_id: listing.vehicle_id,
-          quantity: 1,
-          unit_price: listing.vehicle.price,
-          total_price: listing.vehicle.price,
-          created_at: new Date(),
-        },
-      });
-
-      // Generate unique order code từ timestamp
       const orderCode = Number(Date.now().toString().slice(-9));
+      const amountToCharge = order.meta?.depositAmount ?? Number(order.deposit_amount);
+      const vehicle = order.listing?.vehicle;
+      const orderId = order.order_id;
 
-      // Lưu mapping orderCode -> orderId vào Payment table tạm thời
-      await this.prisma.payment.create({
-        data: {
-          order_id: order.order_id,
-          method: 'PAYOS',
-          amount: listing.vehicle.price,
-          status: 'PENDING',
-          created_at: new Date(),
-        },
-      });
-
-      // Tạo payment link với PayOS
       const paymentLinkData = {
-        orderCode: orderCode,
-        amount: Number(listing.vehicle.price),
-        description: `${order.order_id.substring(0, 8)}`,
-        returnUrl: `${this.FRONTEND_URL}payment/success?orderId=${order.order_id}&orderCode=${orderCode}`,
-        cancelUrl: `${this.FRONTEND_URL}payment/cancel?orderId=${order.order_id}`,
-        items: [
-          {
-            name: `${listing.vehicle.brand} ${listing.vehicle.model} (${listing.vehicle.year})`,
-            quantity: 1,
-            price: Number(listing.vehicle.price),
-          },
-        ],
+        orderCode,
+        amount: amountToCharge,
+        description: `${orderId.substring(0, 8)}`,
+        returnUrl: `${this.FRONTEND_URL}payment/success?orderId=${orderId}&orderCode=${orderCode}`,
+        cancelUrl: `${this.FRONTEND_URL}payment/cancel?orderId=${orderId}`,
+        items: order.orderDetails.map((detail) => ({
+          name: `${detail.vehicle.brand} ${detail.vehicle.model} (${detail.vehicle.year})`,
+          quantity: detail.quantity,
+          price: Number(detail.unit_price),
+        })),
       };
 
       const paymentLink = await this.payos.paymentRequests.create(
@@ -116,19 +77,21 @@ export class PaymentService {
       return {
         success: true,
         data: {
-          orderId: order.order_id,
-          orderCode: orderCode,
+          orderId,
+          orderCode,
           paymentLinkId: paymentLink.paymentLinkId,
           paymentLink: paymentLink.checkoutUrl,
           qrCode: paymentLink.qrCode,
-          amount: listing.vehicle.price,
-          listingId: listing.listing_id,
-          vehicle: {
-            brand: listing.vehicle.brand,
-            model: listing.vehicle.model,
-            year: listing.vehicle.year,
-            price: listing.vehicle.price,
-          },
+          amount: amountToCharge,
+          listingId: order.listing?.listing_id,
+          vehicle: vehicle
+            ? {
+                brand: vehicle.brand,
+                model: vehicle.model,
+                year: vehicle.year,
+                price: vehicle.price,
+              }
+            : null,
         },
       };
     } catch (error) {
@@ -191,16 +154,7 @@ export class PaymentService {
       // Tính tổng tiền
       const totalAmount = Number(order.deposit_amount);
 
-      // Tạo payment record với status PENDING
-      await this.prisma.payment.create({
-        data: {
-          order_id: order.order_id,
-          method: 'PAYOS',
-          amount: totalAmount,
-          status: 'PENDING',
-          created_at: new Date(),
-        },
-      });
+      await this.ensurePendingPaymentRecord(order.order_id, order.deposit_amount);
 
       // Tạo payment link với PayOS
       const paymentLinkData = {
@@ -239,6 +193,39 @@ export class PaymentService {
         success: false,
         error: error.message,
       };
+    }
+  }
+
+  private async ensurePendingPaymentRecord(
+    orderId: string,
+    amount: Prisma.Decimal,
+  ) {
+    const pendingPayment = await this.prisma.payment.findFirst({
+      where: {
+        order_id: orderId,
+        status: PaymentStatus.PENDING,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (!pendingPayment) {
+      await this.prisma.payment.create({
+        data: {
+          order_id: orderId,
+          method: 'PAYOS',
+          amount,
+          status: PaymentStatus.PENDING,
+          created_at: new Date(),
+        },
+      });
+      return;
+    }
+
+    if (pendingPayment.amount.toString() !== amount.toString()) {
+      await this.prisma.payment.update({
+        where: { payment_id: pendingPayment.payment_id },
+        data: { amount },
+      });
     }
   }
 
@@ -350,30 +337,15 @@ export class PaymentService {
         };
       }
 
-      // Cập nhật order status thành DEPOSITED
-      const updatedOrder = await this.prisma.order.update({
-        where: { order_id: order.order_id },
-        data: {
-          status: 'DEPOSITED',
+      const updateResult = await this.orderService.updateOrderStatus(
+        order.order_id,
+        OrderStatus.DEPOSITED,
+        {
+          paymentMethod: 'PAYOS',
+          paidAmount: verifiedData.amount,
+          paymentCode: verifiedData.orderCode,
         },
-      });
-
-      // Tạo payment record
-      await this.prisma.payment.create({
-        data: {
-          order_id: order.order_id,
-          method: 'PAYOS',
-          amount: verifiedData.amount,
-          status: 'SUCCESS',
-          created_at: new Date(),
-        },
-      });
-
-      // Cập nhật listing status thành SOLD (nếu cần)
-      await this.prisma.listing.update({
-        where: { listing_id: order.listing_id },
-        data: { status: 'SOLD' },
-      });
+      );
 
       return {
         success: true,
@@ -382,7 +354,7 @@ export class PaymentService {
           orderId: order.order_id,
           orderCode: verifiedData.orderCode,
           amount: verifiedData.amount,
-          status: 'DEPOSITED',
+          status: updateResult.data?.status ?? OrderStatus.CONFIRMED,
         },
       };
     } catch (error) {
