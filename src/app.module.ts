@@ -10,6 +10,7 @@ import { CartModule } from './modules/Cart/cart.module';
 import { AddressModule } from './modules/Address/address.module';
 import { TransferModule } from './modules/Transfer/transfer.module';
 import { NotificationModule } from './modules/Notification/notification.module';
+import { ChatModule } from './modules/Chat/chat.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
@@ -28,6 +29,7 @@ import { ConfigModule } from '@nestjs/config';
     AddressModule,
     TransferModule,
     NotificationModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

@@ -38,6 +38,8 @@ model User {
   listings         Listing[]        @relation("SellerListings")
   messagesReceived Message[]        @relation("Receiver")
   messagesSent     Message[]        @relation("Sender")
+  chatUser1s       Chat[]           @relation("ChatUser1")
+  chatUser2s       Chat[]           @relation("ChatUser2")
   notifications    Notification[]
   orders           Order[]          @relation("BuyerOrders")
   otps             Otp[]
@@ -298,15 +300,30 @@ model TransferTransaction {
   @@map("transfer_transactions")
 }
 
+model Chat {
+  chat_id    String    @id @default(uuid())
+  user1_id   String
+  user2_id   String
+  created_at DateTime  @default(now())
+  messages   Message[]
+  user1      User      @relation("ChatUser1", fields: [user1_id], references: [user_id])
+  user2      User      @relation("ChatUser2", fields: [user2_id], references: [user_id])
+
+  @@map("chats")
+}
+
 model Message {
   message_id  String   @id @default(uuid())
+  chat_id     String?
   sender_id   String
-  receiver_id String
+  receiver_id String?
   listing_id  String?
-  content     String
-  created_at  DateTime
+  content     String?
+  image_url   String?
+  created_at  DateTime @default(now())
+  chat        Chat?    @relation(fields: [chat_id], references: [chat_id])
   listing     Listing? @relation(fields: [listing_id], references: [listing_id])
-  receiver    User     @relation("Receiver", fields: [receiver_id], references: [user_id])
+  receiver    User?    @relation("Receiver", fields: [receiver_id], references: [user_id])
   sender      User     @relation("Sender", fields: [sender_id], references: [user_id])
 
   @@map("messages")

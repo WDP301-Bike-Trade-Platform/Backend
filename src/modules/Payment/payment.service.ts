@@ -339,7 +339,7 @@ export class PaymentService {
 
       const updateResult = await this.orderService.updateOrderStatus(
         order.order_id,
-        OrderStatus.DEPOSITED,
+        OrderStatus.CONFIRMED,
         {
           paymentMethod: 'PAYOS',
           paidAmount: verifiedData.amount,

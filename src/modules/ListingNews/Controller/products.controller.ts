@@ -104,7 +104,7 @@ export class ProductsController {
     });
   }
 
-  @Roles(2, 3)
+  @Roles(1, 2, 3)
   @Get('/:id')
   @ApiOperation({ summary: 'Get listing detail by id' })
   async getById(@Param('id') id: string) {
