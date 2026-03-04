@@ -200,6 +200,12 @@ export class OrderService {
         note: dto.note,
       });
 
+      // Đánh dấu listing là SOLD ngay khi tạo order để không hiện trên homescreen
+      await tx.listing.update({
+        where: { listing_id: dto.listingId },
+        data: { status: 'SOLD' },
+      });
+
       await tx.notification.create({
         data: {
           user_id: listing.seller_id,
@@ -301,6 +307,13 @@ export class OrderService {
           totalAmount,
           depositAmount,
           note: dto.note,
+        });
+
+        // Đánh dấu tất cả listings là SOLD ngay khi tạo order
+        const listingIds = items.map((item) => item.listingId);
+        await tx.listing.updateMany({
+          where: { listing_id: { in: listingIds } },
+          data: { status: 'SOLD' },
         });
 
         await tx.notification.create({
@@ -486,9 +499,14 @@ export class OrderService {
       include: ORDER_RELATIONS,
     });
 
-    await this.prisma.listing.update({
-      where: { listing_id: order.listing_id },
-      data: { status: 'APPROVED' },
+    // Chuyển tất cả listings của order về ACTIVE
+    const listingIds = order.orderDetails.map((d) => d.listing_id);
+    if (!listingIds.includes(order.listing_id)) {
+      listingIds.push(order.listing_id);
+    }
+    await this.prisma.listing.updateMany({
+      where: { listing_id: { in: listingIds } },
+      data: { status: 'ACTIVE' },
     });
 
     if (depositPaid) {

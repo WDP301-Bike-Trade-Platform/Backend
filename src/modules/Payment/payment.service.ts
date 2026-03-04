@@ -10,7 +10,7 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 @Injectable()
 export class PaymentService {
   private payos: PayOS;
-  private readonly FRONTEND_URL: string;
+  private readonly BACKEND_URL: string;
 
   constructor(
     private configService: ConfigService,
@@ -18,10 +18,9 @@ export class PaymentService {
     @Inject(forwardRef(() => OrderService))
     private orderService: OrderService,
   ) {
-    // Deep link scheme cho mobile app
-    // Development: biketrade:// (hoạt động với Expo Go và dev build)
-    // Production: biketrade:// (custom scheme đã config trong app.json)
-    this.FRONTEND_URL = this.configService.get<string>('FRONTEND_URL') || 'biketrade://';
+    // URL backend dùng cho returnUrl/cancelUrl của PayOS
+    // PayOS redirect browser tới HTTPS URL → server redirect sang deep link mobile
+    this.BACKEND_URL = this.configService.get<string>('BACKEND_URL') || 'http://localhost:3443';
     this.payos = new PayOS({
       clientId: this.configService.get<string>('PAYOS_CLIENT_ID') || '',
       apiKey: this.configService.get<string>('PAYOS_API_KEY') || '',
@@ -61,8 +60,8 @@ export class PaymentService {
         orderCode,
         amount: amountToCharge,
         description: `${orderId.substring(0, 8)}`,
-        returnUrl: `${this.FRONTEND_URL}payment/success?orderId=${orderId}&orderCode=${orderCode}`,
-        cancelUrl: `${this.FRONTEND_URL}payment/cancel?orderId=${orderId}`,
+        returnUrl: `${this.BACKEND_URL}/payment/redirect/success?orderId=${orderId}&orderCode=${orderCode}`,
+        cancelUrl: `${this.BACKEND_URL}/payment/redirect/cancel?orderId=${orderId}`,
         items: order.orderDetails.map((detail) => ({
           name: `${detail.vehicle.brand} ${detail.vehicle.model} (${detail.vehicle.year})`,
           quantity: detail.quantity,
@@ -161,8 +160,8 @@ export class PaymentService {
         orderCode: orderCode,
         amount: totalAmount,
         description: `${order.order_id.substring(0, 8)}`,
-        returnUrl: `${this.FRONTEND_URL}payment/success?orderId=${orderId}&orderCode=${orderCode}`,
-        cancelUrl: `${this.FRONTEND_URL}payment/cancel?orderId=${orderId}`,
+        returnUrl: `${this.BACKEND_URL}/payment/redirect/success?orderId=${orderId}&orderCode=${orderCode}`,
+        cancelUrl: `${this.BACKEND_URL}/payment/redirect/cancel?orderId=${orderId}`,
         items: items,
       };
 
@@ -339,7 +338,7 @@ export class PaymentService {
 
       const updateResult = await this.orderService.updateOrderStatus(
         order.order_id,
-        OrderStatus.CONFIRMED,
+        OrderStatus.DEPOSITED,
         {
           paymentMethod: 'PAYOS',
           paidAmount: verifiedData.amount,
