@@ -11,6 +11,7 @@ import { ListingExpirationCron } from './cron/listing-expiration.cron';
 import { ListingMediaService } from './Service/listingMediaService';
 import { ListingMediaController } from './Controller/listing-media.controller';
 import { AuthModule } from '../Auth/auth.module';
+import { SearchService } from './Service/search.service';
 
 @Module({
   imports: [AuthModule],
@@ -27,6 +28,7 @@ import { AuthModule } from '../Auth/auth.module';
     ListingMediaService,
     AdminListingService,
     ListingExpirationCron,
+    SearchService,
     PrismaService,
   ],
 })
