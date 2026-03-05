@@ -110,19 +110,17 @@ export class PaymentController {
 
   /**
    * Redirect endpoint cho PayOS success → deep link mobile app
-   * Trả về HTML page dùng JavaScript để mở deep link (vì browser không follow
-   * HTTP 302 redirect tới custom scheme như exp:// hay biketrade://)
    */
   @Public()
   @Get('redirect/success')
   @ApiOperation({ summary: 'Redirect từ PayOS checkout sang deep link (success)' })
-  async redirectSuccess(
+  redirectSuccess(
     @Query('orderId') orderId: string,
     @Query('orderCode') orderCode: string,
     @Res() res: Response,
   ) {
     const deepLink = `${this.DEEP_LINK_SCHEME}payment/success?orderId=${orderId}&orderCode=${orderCode}`;
-    return res.send(this.buildRedirectHtml(deepLink, 'Thanh toán thành công'));
+    return res.redirect(deepLink);
   }
 
   /**
@@ -131,43 +129,11 @@ export class PaymentController {
   @Public()
   @Get('redirect/cancel')
   @ApiOperation({ summary: 'Redirect từ PayOS checkout sang deep link (cancel)' })
-  async redirectCancel(
+  redirectCancel(
     @Query('orderId') orderId: string,
     @Res() res: Response,
   ) {
     const deepLink = `${this.DEEP_LINK_SCHEME}payment/cancel?orderId=${orderId}`;
-    return res.send(this.buildRedirectHtml(deepLink, 'Đang quay lại ứng dụng...'));
-  }
-
-  /**
-   * Tạo HTML page để redirect về app qua JavaScript
-   * Browser không follow HTTP 302 tới custom scheme, nên dùng JS window.location
-   */
-  private buildRedirectHtml(deepLink: string, title: string): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>${title}</title>
-        <style>
-          body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-          .container { text-align: center; padding: 20px; }
-          a { color: #007AFF; font-size: 16px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <p>${title}</p>
-          <p>Đang mở ứng dụng...</p>
-          <p><a href="${deepLink}">Nhấn vào đây nếu ứng dụng không tự mở</a></p>
-        </div>
-        <script>
-          window.location.href = "${deepLink}";
-        </script>
-      </body>
-      </html>
-    `;
+    return res.redirect(deepLink);
   }
 }
