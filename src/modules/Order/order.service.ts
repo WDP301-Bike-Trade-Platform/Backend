@@ -7,19 +7,11 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import {
-  Prisma,
-  OrderStatus,
-  PaymentStatus,
-  Address,
-} from '@prisma/client';
+import { Prisma, OrderStatus, PaymentStatus, Address } from '@prisma/client';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderFromCartDto } from './dto/create-order-from-cart.dto';
 import { CartService } from '../Cart/cart.service';
-import {
-  ESCROW_RULES,
-  SupportedPaymentMethod,
-} from './order.constants';
+import { ESCROW_RULES, SupportedPaymentMethod } from './order.constants';
 
 const ORDER_RELATIONS = {
   listing: {
@@ -109,115 +101,124 @@ export class OrderService {
   async createOrder(buyerId: string, dto: CreateOrderDto) {
     const paymentMethod = this.normalizePaymentMethod(dto.paymentMethod);
 
-    const orderId = await this.prisma.$transaction(async (tx) => {
-      const listing = await tx.listing.findUnique({
-        where: { listing_id: dto.listingId },
-        include: {
-          vehicle: true,
-          seller: {
-            select: {
-              user_id: true,
-              full_name: true,
-              email: true,
-              phone: true,
+    const orderId = await this.prisma.$transaction(
+      async (tx) => {
+        const listing = await tx.listing.findUnique({
+          where: { listing_id: dto.listingId },
+          include: {
+            vehicle: true,
+            seller: {
+              select: {
+                user_id: true,
+                full_name: true,
+                email: true,
+                phone: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      if (!listing) {
-        throw new NotFoundException('Listing not found');
-      }
+        if (!listing) {
+          throw new NotFoundException('Listing not found');
+        }
 
-      if (listing.status !== 'APPROVED' && listing.status !== 'ACTIVE') {
-        throw new BadRequestException(
-          'Listing is not available for purchase',
+        if (listing.status !== 'APPROVED' && listing.status !== 'ACTIVE') {
+          throw new BadRequestException(
+            'Listing is not available for purchase',
+          );
+        }
+
+        if (listing.seller_id === buyerId) {
+          throw new BadRequestException('Cannot buy your own listing');
+        }
+
+        const existingOrder = await tx.order.findFirst({
+          where: {
+            listing_id: dto.listingId,
+            status: {
+              in: [
+                OrderStatus.PENDING,
+                OrderStatus.DEPOSITED,
+                OrderStatus.CONFIRMED,
+              ],
+            },
+          },
+          select: { order_id: true },
+        });
+
+        if (existingOrder) {
+          throw new BadRequestException(
+            'This listing already has a pending order',
+          );
+        }
+
+        const totalAmount = new Prisma.Decimal(listing.vehicle.price);
+        const requiresDeposit = this.requiresDeposit(totalAmount);
+        const depositAmount = this.calculateDepositAmount(
+          totalAmount,
+          requiresDeposit,
         );
-      }
 
-      if (listing.seller_id === buyerId) {
-        throw new BadRequestException('Cannot buy your own listing');
-      }
+        const order = await tx.order.create({
+          data: {
+            buyer_id: buyerId,
+            listing_id: dto.listingId,
+            deposit_amount: depositAmount,
+            status: OrderStatus.PENDING,
+            created_at: new Date(),
+          },
+        });
 
-      const existingOrder = await tx.order.findFirst({
-        where: {
-          listing_id: dto.listingId,
-          status: { in: [OrderStatus.PENDING, OrderStatus.DEPOSITED, OrderStatus.CONFIRMED] },
-        },
-        select: { order_id: true },
-      });
+        await tx.orderDetail.create({
+          data: {
+            order_id: order.order_id,
+            listing_id: dto.listingId,
+            vehicle_id: listing.vehicle_id,
+            quantity: 1,
+            unit_price: listing.vehicle.price,
+            total_price: listing.vehicle.price,
+            created_at: new Date(),
+          },
+        });
 
-      if (existingOrder) {
-        throw new BadRequestException(
-          'This listing already has a pending order',
-        );
-      }
+        await this.ensureOrderAddress(tx, {
+          orderId: order.order_id,
+          buyerId,
+          shippingAddressId: dto.shippingAddressId,
+          deliveryAddress: dto.deliveryAddress,
+          deliveryPhone: dto.deliveryPhone,
+        });
 
-      const totalAmount = new Prisma.Decimal(listing.vehicle.price);
-      const requiresDeposit = this.requiresDeposit(totalAmount);
-      const depositAmount = this.calculateDepositAmount(
-        totalAmount,
-        requiresDeposit,
-      );
+        await this.createPaymentPipeline(tx, {
+          orderId: order.order_id,
+          buyerId,
+          paymentMethod,
+          requiresDeposit,
+          totalAmount,
+          depositAmount,
+          note: dto.note,
+        });
 
-      const order = await tx.order.create({
-        data: {
-          buyer_id: buyerId,
-          listing_id: dto.listingId,
-          deposit_amount: depositAmount,
-          status: OrderStatus.PENDING,
-          created_at: new Date(),
-        },
-      });
+        // Đánh dấu listing là SOLD ngay khi tạo order để không hiện trên homescreen
+        await tx.listing.update({
+          where: { listing_id: dto.listingId },
+          data: { status: 'SOLD' },
+        });
 
-      await tx.orderDetail.create({
-        data: {
-          order_id: order.order_id,
-          listing_id: dto.listingId,
-          vehicle_id: listing.vehicle_id,
-          quantity: 1,
-          unit_price: listing.vehicle.price,
-          total_price: listing.vehicle.price,
-          created_at: new Date(),
-        },
-      });
+        await tx.notification.create({
+          data: {
+            user_id: listing.seller_id,
+            type: 'ORDER',
+            title: 'New Order',
+            message: `You have a new order for ${listing.vehicle.brand} ${listing.vehicle.model}`,
+            created_at: new Date(),
+          },
+        });
 
-      await this.ensureOrderAddress(tx, {
-        orderId: order.order_id,
-        buyerId,
-        shippingAddressId: dto.shippingAddressId,
-        deliveryAddress: dto.deliveryAddress,
-        deliveryPhone: dto.deliveryPhone,
-      });
-
-      await this.createPaymentPipeline(tx, {
-        orderId: order.order_id,
-        buyerId,
-        paymentMethod,
-        requiresDeposit,
-        totalAmount,
-        depositAmount,
-        note: dto.note,
-      });
-
-      // Đánh dấu listing là SOLD ngay khi tạo order để không hiện trên homescreen
-      await tx.listing.update({
-        where: { listing_id: dto.listingId },
-        data: { status: 'SOLD' },
-      });
-
-      await tx.notification.create({
-        data: {
-          user_id: listing.seller_id,
-          type: 'ORDER',
-          title: 'Đơn hàng mới',
-          message: `Bạn có đơn hàng mới cho ${listing.vehicle.brand} ${listing.vehicle.model}`,
-          created_at: new Date(),
-        },
-      });
-
-      return order.order_id;
-    });
+        return order.order_id;
+      },
+      { timeout: 15000 },
+    );
 
     const order = await this.fetchOrderWithRelations(orderId);
     return {
@@ -254,85 +255,88 @@ export class OrderService {
 
     const createdOrderIds: string[] = [];
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const [sellerId, items] of Object.entries(itemsBySeller)) {
-        const totalAmountNumber = items.reduce(
-          (sum, item) => sum + item.totalPrice,
-          0,
-        );
-        const totalAmount = new Prisma.Decimal(totalAmountNumber);
-        const requiresDeposit = this.requiresDeposit(totalAmount);
-        const depositAmount = this.calculateDepositAmount(
-          totalAmount,
-          requiresDeposit,
-        );
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const [sellerId, items] of Object.entries(itemsBySeller)) {
+          const totalAmountNumber = items.reduce(
+            (sum, item) => sum + item.totalPrice,
+            0,
+          );
+          const totalAmount = new Prisma.Decimal(totalAmountNumber);
+          const requiresDeposit = this.requiresDeposit(totalAmount);
+          const depositAmount = this.calculateDepositAmount(
+            totalAmount,
+            requiresDeposit,
+          );
 
-        const order = await tx.order.create({
-          data: {
-            buyer_id: buyerId,
-            listing_id: items[0].listingId,
-            deposit_amount: depositAmount,
-            status: OrderStatus.PENDING,
-            created_at: new Date(),
-          },
-        });
-
-        for (const item of items) {
-          await tx.orderDetail.create({
+          const order = await tx.order.create({
             data: {
-              order_id: order.order_id,
-              listing_id: item.listingId,
-              vehicle_id: item.vehicleId,
-              quantity: item.quantity,
-              unit_price: item.unitPrice,
-              total_price: item.totalPrice,
+              buyer_id: buyerId,
+              listing_id: items[0].listingId,
+              deposit_amount: depositAmount,
+              status: OrderStatus.PENDING,
               created_at: new Date(),
             },
           });
+
+          for (const item of items) {
+            await tx.orderDetail.create({
+              data: {
+                order_id: order.order_id,
+                listing_id: item.listingId,
+                vehicle_id: item.vehicleId,
+                quantity: item.quantity,
+                unit_price: item.unitPrice,
+                total_price: item.totalPrice,
+                created_at: new Date(),
+              },
+            });
+          }
+
+          await this.ensureOrderAddress(tx, {
+            orderId: order.order_id,
+            buyerId,
+            shippingAddressId: dto.shippingAddressId,
+            deliveryAddress: dto.deliveryAddress,
+            deliveryPhone: dto.deliveryPhone,
+          });
+
+          await this.createPaymentPipeline(tx, {
+            orderId: order.order_id,
+            buyerId,
+            paymentMethod,
+            requiresDeposit,
+            totalAmount,
+            depositAmount,
+            note: dto.note,
+          });
+
+          // Đánh dấu tất cả listings là SOLD ngay khi tạo order
+          const listingIds = items.map((item) => item.listingId);
+          await tx.listing.updateMany({
+            where: { listing_id: { in: listingIds } },
+            data: { status: 'SOLD' },
+          });
+
+          await tx.notification.create({
+            data: {
+              user_id: sellerId,
+              type: 'ORDER',
+              title: 'New Order',
+              message: `You have a new order with ${items.length} products`,
+              created_at: new Date(),
+            },
+          });
+
+          createdOrderIds.push(order.order_id);
         }
 
-        await this.ensureOrderAddress(tx, {
-          orderId: order.order_id,
-          buyerId,
-          shippingAddressId: dto.shippingAddressId,
-          deliveryAddress: dto.deliveryAddress,
-          deliveryPhone: dto.deliveryPhone,
+        await tx.cartItem.deleteMany({
+          where: { cart_id: cartData.cartId },
         });
-
-        await this.createPaymentPipeline(tx, {
-          orderId: order.order_id,
-          buyerId,
-          paymentMethod,
-          requiresDeposit,
-          totalAmount,
-          depositAmount,
-          note: dto.note,
-        });
-
-        // Đánh dấu tất cả listings là SOLD ngay khi tạo order
-        const listingIds = items.map((item) => item.listingId);
-        await tx.listing.updateMany({
-          where: { listing_id: { in: listingIds } },
-          data: { status: 'SOLD' },
-        });
-
-        await tx.notification.create({
-          data: {
-            user_id: sellerId,
-            type: 'ORDER',
-            title: 'Đơn hàng mới',
-            message: `Bạn có đơn hàng mới với ${items.length} sản phẩm`,
-            created_at: new Date(),
-          },
-        });
-
-        createdOrderIds.push(order.order_id);
-      }
-
-      await tx.cartItem.deleteMany({
-        where: { cart_id: cartData.cartId },
-      });
-    });
+      },
+      { timeout: 15000 },
+    );
 
     const orders = await this.prisma.order.findMany({
       where: { order_id: { in: createdOrderIds } },
@@ -401,10 +405,7 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    if (
-      order.buyer_id !== userId &&
-      order.listing.seller_id !== userId
-    ) {
+    if (order.buyer_id !== userId && order.listing.seller_id !== userId) {
       throw new ForbiddenException('You do not have access to this order');
     }
 
@@ -436,9 +437,7 @@ export class OrderService {
     }
 
     if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(
-        'Only pending COD orders can be confirmed',
-      );
+      throw new BadRequestException('Only pending COD orders can be confirmed');
     }
 
     const updatedOrder = await this.prisma.order.update({
@@ -454,8 +453,8 @@ export class OrderService {
       data: {
         user_id: order.buyer_id,
         type: 'ORDER',
-        title: 'Đơn hàng được xác nhận',
-        message: `Đơn hàng ${order.listing.vehicle.brand} ${order.listing.vehicle.model} đã được xác nhận${note ? ': ' + note : ''}`,
+        title: 'Order Confirmed',
+        message: `Your order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been confirmed${note ? ': ' + note : ''}`,
         created_at: new Date(),
       },
     });
@@ -506,7 +505,7 @@ export class OrderService {
     }
     await this.prisma.listing.updateMany({
       where: { listing_id: { in: listingIds } },
-      data: { status: 'ACTIVE' },
+      data: { status: 'APPROVED' },
     });
 
     if (depositPaid) {
@@ -528,8 +527,8 @@ export class OrderService {
       data: {
         user_id: order.listing.seller_id,
         type: 'ORDER',
-        title: 'Đơn hàng bị hủy',
-        message: `Đơn hàng ${order.listing.vehicle.brand} ${order.listing.vehicle.model} đã bị hủy. Lý do: ${reason}`,
+        title: 'Order Cancelled',
+        message: `The order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been cancelled. Reason: ${reason}`,
         created_at: new Date(),
       },
     });
@@ -553,90 +552,99 @@ export class OrderService {
       paymentCode?: number | string;
     },
   ) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { order_id: orderId },
-        include: {
-          listing: {
-            include: {
-              vehicle: true,
-              seller: true,
+    // Bước 1: Transaction chỉ chứa write operations (tránh timeout trên Render free tier)
+    const txResult = await this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({
+          where: { order_id: orderId },
+          include: {
+            listing: {
+              include: {
+                vehicle: true,
+                seller: true,
+              },
             },
-          },
-          payments: true,
-          paymentDeposits: true,
-        },
-      });
-
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-
-      let nextStatus = status;
-      if (status === OrderStatus.DEPOSITED) {
-        nextStatus = OrderStatus.CONFIRMED;
-
-        await tx.payment.updateMany({
-          where: {
-            order_id: orderId,
-            status: PaymentStatus.PENDING,
-          },
-          data: {
-            status: PaymentStatus.SUCCESS,
-            method: (options?.paymentMethod ?? 'PAYOS').toUpperCase(),
+            payments: true,
+            paymentDeposits: true,
           },
         });
 
-        await tx.paymentDeposit.updateMany({
+        if (!order) {
+          throw new NotFoundException('Order not found');
+        }
+
+        let nextStatus = status;
+        if (status === OrderStatus.DEPOSITED) {
+          nextStatus = OrderStatus.CONFIRMED;
+
+          await tx.payment.updateMany({
+            where: {
+              order_id: orderId,
+              status: PaymentStatus.PENDING,
+            },
+            data: {
+              status: PaymentStatus.SUCCESS,
+              method: (options?.paymentMethod ?? 'PAYOS').toUpperCase(),
+            },
+          });
+
+          await tx.paymentDeposit.updateMany({
+            where: { order_id: orderId },
+            data: {
+              status: 'SUCCESS',
+              note: options?.paymentCode
+                ? `Payment code: ${options.paymentCode}`
+                : undefined,
+            },
+          });
+        }
+
+        await tx.order.update({
           where: { order_id: orderId },
           data: {
-            status: 'SUCCESS',
-            note: options?.paymentCode
-              ? `Payment code: ${options.paymentCode}`
-              : undefined,
+            status: nextStatus,
+            ...(nextStatus === OrderStatus.CONFIRMED && {
+              confirmed_at: new Date(),
+            }),
           },
         });
-      }
 
-      const updatedOrder = await tx.order.update({
-        where: { order_id: orderId },
-        data: {
-          status: nextStatus,
-          ...(nextStatus === OrderStatus.CONFIRMED && {
-            confirmed_at: new Date(),
-          }),
-        },
-        include: ORDER_RELATIONS,
+        if (status === OrderStatus.DEPOSITED) {
+          await tx.listing.update({
+            where: { listing_id: order.listing_id },
+            data: { status: 'SOLD' },
+          });
+        }
+
+        return order;
+      },
+      { timeout: 15000 },
+    );
+
+    // Bước 2: Tạo notification bên ngoài transaction (không cần atomicity)
+    if (status === OrderStatus.DEPOSITED) {
+      await this.prisma.notification.createMany({
+        data: [
+          {
+            user_id: txResult.buyer_id,
+            type: 'ORDER',
+            title: 'Payment Successful',
+            message: `Payment successful for ${txResult.listing.vehicle.brand} ${txResult.listing.vehicle.model}`,
+            created_at: new Date(),
+          },
+          {
+            user_id: txResult.listing.seller_id,
+            type: 'ORDER',
+            title: 'Order Paid',
+            message: `The order for ${txResult.listing.vehicle.brand} ${txResult.listing.vehicle.model} has been paid`,
+            created_at: new Date(),
+          },
+        ],
       });
+    }
 
-      if (status === OrderStatus.DEPOSITED) {
-        await tx.listing.update({
-          where: { listing_id: order.listing_id },
-          data: { status: 'SOLD' },
-        });
-
-        await tx.notification.createMany({
-          data: [
-            {
-              user_id: order.buyer_id,
-              type: 'ORDER',
-              title: 'Thanh toán thành công',
-              message: `Thanh toán thành công cho ${order.listing.vehicle.brand} ${order.listing.vehicle.model}`,
-              created_at: new Date(),
-            },
-            {
-              user_id: order.listing.seller_id,
-              type: 'ORDER',
-              title: 'Đơn hàng đã được thanh toán',
-              message: `Đơn hàng ${order.listing.vehicle.brand} ${order.listing.vehicle.model} đã được thanh toán`,
-              created_at: new Date(),
-            },
-          ],
-        });
-      }
-
-      return updatedOrder;
-    });
+    // Bước 3: Fetch full order với relations bên ngoài transaction
+    const result = await this.fetchOrderWithRelations(orderId);
 
     return {
       success: true,
@@ -674,8 +682,8 @@ export class OrderService {
       data: {
         user_id: order.listing.seller_id,
         type: 'ORDER',
-        title: 'Đơn hàng hoàn thành',
-        message: `Đơn hàng ${order.listing.vehicle.brand} ${order.listing.vehicle.model} đã hoàn thành`,
+        title: 'Order Completed',
+        message: `The order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been completed`,
         created_at: new Date(),
       },
     });
@@ -688,13 +696,10 @@ export class OrderService {
 
   private normalizePaymentMethod(method?: string): SupportedPaymentMethod {
     const normalized = (method ?? 'PAYOS').trim().toUpperCase();
-    if (
-      normalized !== 'COD' &&
-      normalized !== 'PAYOS'
-    ) {
+    if (normalized !== 'COD' && normalized !== 'PAYOS') {
       throw new BadRequestException('Unsupported payment method');
     }
-    return normalized as SupportedPaymentMethod;
+    return normalized;
   }
 
   private requiresDeposit(amount: Prisma.Decimal) {
@@ -806,9 +811,7 @@ export class OrderService {
   private buildOrderMeta(order: OrderWithRelations): OrderMeta {
     const totalAmount = this.sumOrderDetails(order.orderDetails);
     const depositRequired = this.requiresDeposit(totalAmount);
-    const depositAmount = depositRequired
-      ? order.deposit_amount
-      : totalAmount;
+    const depositAmount = depositRequired ? order.deposit_amount : totalAmount;
     const depositPaid = this.isDepositPaid(order);
     const paymentMethod = this.resolvePrimaryPaymentMethod(order.payments);
 

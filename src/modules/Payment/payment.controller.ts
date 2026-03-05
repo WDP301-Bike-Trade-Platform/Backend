@@ -95,7 +95,7 @@ export class PaymentController {
     if (!result.success) {
       return {
         success: false,
-        message: 'Invalid webhook signature',
+        message: result.message ?? 'Webhook processing failed',
         error: result.error,
       };
     }

@@ -357,9 +357,12 @@ export class PaymentService {
         },
       };
     } catch (error) {
+      const msg = error.message as string;
+      const isSignatureError = msg.toLowerCase().includes('signature');
       return {
         success: false,
-        error: error.message,
+        message: isSignatureError ? 'Invalid webhook signature' : 'Webhook processing failed',
+        error: msg,
       };
     }
   }
