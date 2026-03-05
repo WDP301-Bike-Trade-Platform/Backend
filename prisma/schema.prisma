@@ -51,6 +51,8 @@ model User {
   reviewAsSeller   Review[]         @relation("ReviewSeller")
   reviewsReceived  Review[]         @relation("Target")
   profile          UserProfile?
+  wishlist Wishlist?
+
   role             Role             @relation(fields: [role_id], references: [role_id])
 
   @@map("users")
@@ -149,6 +151,7 @@ model Listing {
   orders        Order[]
   reports       Report[]
   reviews       Review[]
+  wishlistItems WishlistItem[]
 
   @@map("listings")
 }
@@ -426,7 +429,28 @@ model CartItem {
   @@unique([cart_id, listing_id])
   @@map("cart_items")
 }
+model Wishlist {
+  wishlist_id String   @id @default(uuid())
+  user_id     String   @unique
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  user        User     @relation(fields: [user_id], references: [user_id])
+  items       WishlistItem[]
 
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  wishlist_item_id String   @id @default(uuid())
+  wishlist_id      String
+  listing_id       String
+  added_at         DateTime @default(now())
+  wishlist         Wishlist @relation(fields: [wishlist_id], references: [wishlist_id], onDelete: Cascade)
+  listing          Listing  @relation(fields: [listing_id], references: [listing_id])
+
+  @@unique([wishlist_id, listing_id])
+  @@map("wishlist_items")
+}
 enum RoleName {
   USER
   INSPECTOR

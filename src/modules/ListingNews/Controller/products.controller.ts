@@ -21,6 +21,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiQuery,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
@@ -29,6 +30,8 @@ import { ListingStatus } from '@prisma/client';
 import { ChangeListingStatusDto } from '../DTOs/seller-update-listing-status.dto';
 import { ChangeListingStatusService } from '../Service/sellerListingStatus.service';
 import { JwtUser } from 'src/common/types/types';
+import { SearchService } from '../Service/search.service';
+import { ProductSearchQuery } from '../DTOs/search/product-search.dto';
 
 @ApiTags('Listing Products')
 @ApiBearerAuth('access-token')
@@ -40,6 +43,8 @@ export class ProductsController {
     private readonly getListingService: GetListingService,
     private readonly updateListingService: UpdateListingService,
     private readonly changeListingStatusService: ChangeListingStatusService,
+      private readonly searchService: SearchService,
+
   ) {}
 
   @Roles(1)
@@ -52,7 +57,11 @@ export class ProductsController {
     const sellerId = req.user.user_id;
     return this.createListingService.createListing(dto, sellerId);
   }
-
+  @Public()
+  @Get('search')
+  async search(@Query() query: ProductSearchQuery) {
+    return this.searchService.search(query);
+  }
   @Roles(1)
   @Patch('/:id')
   @ApiOperation({ summary: 'Seller updates their pending listing' })
