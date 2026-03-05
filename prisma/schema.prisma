@@ -34,7 +34,8 @@ model User {
   is_verified      Boolean          @default(false)
   addresses        Address[]
   cart             Cart?            @relation("BuyerCart")
-  inspections      Inspection[]     @relation("InspectorInspections")
+  inspectionsRequested Inspection[] @relation("InspectionRequester") // Người dùng với tư cách người yêu cầu (buyer)
+  inspectionsAssigned  Inspection[] @relation("Inspector")           // Người dùng với tư cách người thực hiện (inspector)
   listings         Listing[]        @relation("SellerListings")
   messagesReceived Message[]        @relation("Receiver")
   messagesSent     Message[]        @relation("Sender")
@@ -171,21 +172,33 @@ model ListingMedia {
   @@map("listing_media")
 }
 
+enum InspectionRequestStatus {
+  PENDING   // chờ xác nhận lịch
+  CONFIRMED // đã xác nhận lịch
+  COMPLETED // đã hoàn thành (có kết quả)
+  CANCELLED // đã hủy
+}
 
 model Inspection {
-  inspection_id String           @id @default(uuid())
-  inspector_id  String
-  listing_id    String
-  report_url    String?
-  status        InspectionStatus
-  valid_until   DateTime?
-  created_at    DateTime
-  inspector     User             @relation("InspectorInspections", fields: [inspector_id], references: [user_id])
-  listing       Listing          @relation(fields: [listing_id], references: [listing_id])
+  inspection_id     String                   @id @default(uuid())
+  listing_id        String
+  requested_by_id   String                    // người mua yêu cầu
+  inspector_id      String?                   // người thực hiện (có thể null khi mới tạo)
+  scheduled_at      DateTime?                  // thời gian hẹn kiểm định
+  request_status    InspectionRequestStatus   @default(PENDING)
+  result_status     InspectionStatus?          // PASSED/FAILED/EXPIRED (kết quả)
+  report_url        String?
+  notes             String?
+  created_at        DateTime                  @default(now())
+  updated_at        DateTime                  @updatedAt
+  valid_until       DateTime?                  // hiệu lực của kết quả (nếu có)
+
+  listing           Listing                   @relation(fields: [listing_id], references: [listing_id])
+  requester         User                      @relation("InspectionRequester", fields: [requested_by_id], references: [user_id])
+  inspector         User?                     @relation("Inspector", fields: [inspector_id], references: [user_id])
 
   @@map("inspections")
 }
-
 model Order {
   order_id        String           @id @default(uuid())
   buyer_id        String
