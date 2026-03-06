@@ -21,39 +21,40 @@ enum VehicleCondition {
 }
 
 model User {
-  user_id          String           @id @default(uuid())
-  full_name        String
-  email            String           @unique
-  phone            String           @unique
-  password         String
-  role_id          Int
-  violation_count  Int              @default(0)
-  locked_until     DateTime?
-  created_at       DateTime
-  ip_address       String?
-  is_verified      Boolean          @default(false)
-  addresses        Address[]
-  cart             Cart?            @relation("BuyerCart")
-  inspections      Inspection[]     @relation("InspectorInspections")
-  listings         Listing[]        @relation("SellerListings")
-  messagesReceived Message[]        @relation("Receiver")
-  messagesSent     Message[]        @relation("Sender")
-  chatUser1s       Chat[]           @relation("ChatUser1")
-  chatUser2s       Chat[]           @relation("ChatUser2")
-  notifications    Notification[]
-  orders           Order[]          @relation("BuyerOrders")
-  otps             Otp[]
-  paymentDeposits  PaymentDeposit[]
-  reports          Report[]
-  transfers        Transfer[]
-  reviewAsBuyer    Review[]         @relation("ReviewBuyer")
-  reviewsGiven     Review[]         @relation("Reviewer")
-  reviewAsSeller   Review[]         @relation("ReviewSeller")
-  reviewsReceived  Review[]         @relation("Target")
-  profile          UserProfile?
-  wishlist Wishlist?
-
-  role             Role             @relation(fields: [role_id], references: [role_id])
+  user_id              String           @id @default(uuid())
+  full_name            String
+  email                String           @unique
+  phone                String           @unique
+  password             String
+  role_id              Int
+  violation_count      Int              @default(0)
+  locked_until         DateTime?
+  created_at           DateTime
+  ip_address           String?
+  is_verified          Boolean          @default(false)
+  addresses            Address[]
+  cart                 Cart?            @relation("BuyerCart")
+  inspectionsRequested Inspection[]     @relation("InspectionRequester")
+  inspectionsAssigned  Inspection[]     @relation("Inspector")
+  listings             Listing[]        @relation("SellerListings")
+  messagesReceived     Message[]        @relation("Receiver")
+  messagesSent         Message[]        @relation("Sender")
+  chatUser1s           Chat[]           @relation("ChatUser1")
+  chatUser2s           Chat[]           @relation("ChatUser2")
+  notifications        Notification[]
+  orders               Order[]          @relation("BuyerOrders")
+  otps                 Otp[]
+  paymentDeposits      PaymentDeposit[]
+  transfers            Transfer[]
+  reviewAsBuyer        Review[]         @relation("ReviewBuyer")
+  reviewsGiven         Review[]         @relation("Reviewer")
+  reviewAsSeller       Review[]         @relation("ReviewSeller")
+  reviewsReceived      Review[]         @relation("Target")
+  profile              UserProfile?
+  wishlist             Wishlist?
+  reports              Report[]         @relation("UserReports")      // 👈 báo cáo do user này tạo
+  reportsProcessed     Report[]         @relation("AdminProcessed")   // 👈 báo cáo do user này (admin) xử lý
+  role                 Role             @relation(fields: [role_id], references: [role_id])
 
   @@map("users")
 }
@@ -171,21 +172,33 @@ model ListingMedia {
   @@map("listing_media")
 }
 
+enum InspectionRequestStatus {
+  PENDING   // chờ xác nhận lịch
+  CONFIRMED // đã xác nhận lịch
+  COMPLETED // đã hoàn thành (có kết quả)
+  CANCELLED // đã hủy
+}
 
 model Inspection {
-  inspection_id String           @id @default(uuid())
-  inspector_id  String
-  listing_id    String
-  report_url    String?
-  status        InspectionStatus
-  valid_until   DateTime?
-  created_at    DateTime
-  inspector     User             @relation("InspectorInspections", fields: [inspector_id], references: [user_id])
-  listing       Listing          @relation(fields: [listing_id], references: [listing_id])
+  inspection_id     String                   @id @default(uuid())
+  listing_id        String
+  requested_by_id   String                    // người mua yêu cầu
+  inspector_id      String?                   // người thực hiện (có thể null khi mới tạo)
+  scheduled_at      DateTime?                  // thời gian hẹn kiểm định
+  request_status    InspectionRequestStatus   @default(PENDING)
+  result_status     InspectionStatus?          // PASSED/FAILED/EXPIRED (kết quả)
+  report_url        String?
+  notes             String?
+  created_at        DateTime                  @default(now())
+  updated_at        DateTime                  @updatedAt
+  valid_until       DateTime?                  // hiệu lực của kết quả (nếu có)
+
+  listing           Listing                   @relation(fields: [listing_id], references: [listing_id])
+  requester         User                      @relation("InspectionRequester", fields: [requested_by_id], references: [user_id])
+  inspector         User?                     @relation("Inspector", fields: [inspector_id], references: [user_id])
 
   @@map("inspections")
 }
-
 model Order {
   order_id        String           @id @default(uuid())
   buyer_id        String
@@ -357,16 +370,40 @@ model Review {
 
   @@map("reviews")
 }
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  RESOLVED
+  REJECTED
+  CANCELLED
+}
+
+enum ReportResolution {
+  WARNING
+  HIDE_LISTING
+  DELETE_LISTING
+  BAN_USER
+  NO_ACTION
+  OTHER
+}
 
 model Report {
-  report_id  String   @id @default(uuid())
-  user_id    String
-  listing_id String
-  reason     String
-  status     String
-  created_at DateTime
-  listing    Listing  @relation(fields: [listing_id], references: [listing_id])
-  user       User     @relation(fields: [user_id], references: [user_id])
+  report_id     String           @id @default(uuid())
+  user_id       String
+  listing_id    String
+  reason        String
+  description   String?
+  status        ReportStatus     @default(PENDING)
+  resolution    ReportResolution?
+  processed_by  String?
+  processed_at  DateTime?
+  admin_notes   String?
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+
+  listing       Listing          @relation(fields: [listing_id], references: [listing_id])
+  user          User             @relation("UserReports", fields: [user_id], references: [user_id])   // 👈 thêm "UserReports"
+  admin         User?            @relation("AdminProcessed", fields: [processed_by], references: [user_id])
 
   @@map("reports")
 }

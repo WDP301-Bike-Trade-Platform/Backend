@@ -13,6 +13,8 @@ import { NotificationModule } from './modules/Notification/notification.module';
 import { ChatModule } from './modules/Chat/chat.module';
 import { ConfigModule } from '@nestjs/config';
 import { WishlistModule } from './modules/Wishlist/wishlist.module';
+import { InspectionModule } from './modules/Inspections/inspection.module';
+import { ReportModule } from './modules/Report/report.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { WishlistModule } from './modules/Wishlist/wishlist.module';
     NotificationModule,
     ChatModule,
     WishlistModule,
+    InspectionModule,
+    ReportModule
   ],
 })
 export class AppModule {}
