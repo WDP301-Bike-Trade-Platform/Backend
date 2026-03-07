@@ -88,6 +88,9 @@ model UserProfile {
 model Category {
   category_id String    @id @default(uuid())
   name        String
+  parent_id   String?   // ID danh mục cha (null nếu là danh mục gốc)
+  parent      Category? @relation("CategoryHierarchy", fields: [parent_id], references: [category_id])
+  children    Category[] @relation("CategoryHierarchy")
   vehicles    Vehicle[]
 
   @@map("categories")

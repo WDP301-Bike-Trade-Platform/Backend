@@ -3,8 +3,8 @@ import { CategoryService } from './category.service';
 import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
 import { Public } from 'src/common/decorators/public.decorator';
+import { CategoryQueryDto } from './DTOs/category.dto';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -15,14 +15,13 @@ export class CategoryController {
 
   @Get()
   @Public()
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    example: 1,
-    description: 'Trang hiện tại (mặc định = 1)',
-  })
-  async getCategories(@Query('page') page?: string) {
-    const pageNumber = Number(page) || 1;
-    return this.categoryService.findAll(pageNumber);
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'parentId', required: false, description: 'Lọc theo cha (UUID hoặc "null")' })
+  @ApiQuery({ name: 'tree', required: false, description: 'Trả về dạng cây?', example: false })
+  async getCategories(@Query() query: CategoryQueryDto) {
+    // Đặt tree mặc định là false cho public (trả về phẳng)
+    query.tree = query.tree ?? false;
+    return this.categoryService.findAll(query);
   }
 }
