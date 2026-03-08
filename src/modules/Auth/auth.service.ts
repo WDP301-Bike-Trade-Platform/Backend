@@ -31,38 +31,6 @@ export class AuthService {
     const hashed = await bcrypt.hash(dto.password, 10);
 
     try {
-      /*
-      // ==== OTP-BASED REGISTRATION (disabled for Render deployment) ====
-      const user = await this.prisma.user.create({
-        data: {
-          full_name: dto.full_name,
-          email,
-          phone: dto.phone.trim(),
-          password: hashed,
-          role_id: 1,
-          is_verified: false,
-          created_at: new Date(),
-          ip_address: null,
-        },
-      });
-
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-      // Save OTP đồng bộ (phải đợi)
-      await this.otpService.saveOtpForUser(user.user_id, otp, 5 * 60);
-      
-      // Send email BẤT ĐỒNG BỘ - không chờ kết quả để tránh block request
-      this.otpService.sendOtpByEmail(email, otp).catch((error) => {
-        console.error('Failed to send OTP email:', error);
-        // Log error nhưng không throw để không ảnh hưởng user experience
-      });
-
-      return {
-        ok: true,
-        message: 'OTP đã gửi. Vui lòng xác nhận tài khoản.',
-      };
-      */
-
       // ==== SIMPLIFIED REGISTRATION (no OTP) ====
       await this.prisma.user.create({
         data: {
@@ -137,6 +105,14 @@ export class AuthService {
       throw new BadRequestException('Sai email hoặc mật khẩu');
     }
 
+    // 🔐 Kiểm tra tài khoản bị khóa
+    const now = new Date();
+    if (user.locked_until && user.locked_until > now) {
+      throw new BadRequestException(
+        `Tài khoản của bạn đã bị khóa đến ${user.locked_until.toLocaleString('vi-VN')}.`,
+      );
+    }
+
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       throw new BadRequestException('Sai email hoặc mật khẩu');
@@ -186,6 +162,14 @@ export class AuthService {
       throw new BadRequestException('Email không tồn tại');
     }
 
+    // 🔐 Kiểm tra tài khoản bị khóa
+    const now = new Date();
+    if (user.locked_until && user.locked_until > now) {
+      throw new BadRequestException(
+        'Tài khoản đang bị khóa, không thể yêu cầu đặt lại mật khẩu.',
+      );
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const resetToken = this.resetTokenService.generate(user.user_id);
 
@@ -214,6 +198,19 @@ export class AuthService {
       userId = this.resetTokenService.verify(resetToken);
     } catch {
       throw new BadRequestException('Reset token không hợp lệ hoặc đã hết hạn');
+    }
+
+    // 🔐 Kiểm tra tài khoản bị khóa trước khi cho đổi mật khẩu
+    const user = await this.prisma.user.findUnique({
+      where: { user_id: userId },
+      select: { locked_until: true },
+    });
+
+    const now = new Date();
+    if (user?.locked_until && user.locked_until > now) {
+      throw new BadRequestException(
+        'Tài khoản đang bị khóa, không thể đổi mật khẩu.',
+      );
     }
 
     const valid = await this.otpService.verifyOtpForUser(userId, otp);
