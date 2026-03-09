@@ -103,7 +103,7 @@ export class AdminOrderService {
       const upper = query.status.toUpperCase();
       if (!ALLOWED_STATUSES.has(upper)) {
         throw new BadRequestException(
-          `Trạng thái không hợp lệ. Cho phép: ${[...ALLOWED_STATUSES].join(', ')}`,
+          `Invalid status. Allowed: ${[...ALLOWED_STATUSES].join(', ')}`,
         );
       }
       where.status = upper as OrderStatus;
@@ -149,23 +149,20 @@ export class AdminOrderService {
     });
 
     if (!order) {
-      throw new NotFoundException('Không tìm thấy đơn hàng.');
-    }
+      throw new NotFoundException('Order not found.');
 
-    return {
+    }
+      return {
       success: true,
       data: this.mapOrderDetail(order),
     };
   }
-
-  /* ────────────── Cập nhật trạng thái ─────────────────── */
-
   async updateStatus(adminUserId: string, orderId: string, dto: AdminUpdateOrderStatusDto) {
     const targetStatus = dto.status.toUpperCase();
 
     if (!ALLOWED_STATUSES.has(targetStatus)) {
       throw new BadRequestException(
-        `Giá trị trạng thái không hợp lệ. Cho phép: ${[...ALLOWED_STATUSES].join(', ')}`,
+        `Invalid status value. Allowed: ${[...ALLOWED_STATUSES].join(', ')}`,
       );
     }
 
@@ -175,16 +172,16 @@ export class AdminOrderService {
     });
 
     if (!order) {
-      throw new NotFoundException('Không tìm thấy đơn hàng.');
+      throw new NotFoundException('Order not found.');
     }
 
     if (order.status === targetStatus) {
-      return { success: true, message: 'Đơn hàng đã ở trạng thái yêu cầu.' };
+      return { success: true, message: 'Order is already in the requested status.' };
     }
 
     if (!this.isTransitionAllowed(order.status, targetStatus)) {
       throw new BadRequestException(
-        `Chuyển trạng thái không hợp lệ: ${order.status} → ${targetStatus}.`,
+        `Invalid status transition: ${order.status} → ${targetStatus}.`,
       );
     }
 
@@ -201,7 +198,7 @@ export class AdminOrderService {
           where: { order_id: orderId },
           data: { status: targetStatus as OrderStatus },
         });
-        return { success: true, message: 'Đã cập nhật trạng thái đơn hàng.' };
+        return { success: true, message: 'Order status updated.' };
       }
     }
   }
@@ -227,8 +224,8 @@ export class AdminOrderService {
           data: {
             status: 'REFUNDED',
             note: reason
-              ? `Admin hủy: ${reason}`
-              : 'Admin hủy đơn hàng',
+              ? `Admin cancelled: ${reason}`
+              : 'Admin cancelled order',
           },
         });
 
@@ -248,10 +245,10 @@ export class AdminOrderService {
     });
 
     // Thông báo buyer + seller
-    const text = `Đơn hàng đã bị hủy bởi Admin${reason ? '. Lý do: ' + reason : ''}`;
-    await this.notifyOrderParties(order, 'Đơn hàng bị hủy', text);
+    const text = `Order has been cancelled by Admin${reason ? '. Reason: ' + reason : ''}`;
+    await this.notifyOrderParties(order, 'Order Cancelled', text);
 
-    return { success: true, message: 'Đơn hàng đã bị hủy.' };
+    return { success: true, message: 'Order has been cancelled.' };
   }
 
   /* ────────────── Confirm ───────────────────────────────── */
@@ -262,7 +259,7 @@ export class AdminOrderService {
     // Chỉ COD mới cần admin xác nhận thủ công
     if (paymentMethod !== 'COD') {
       throw new BadRequestException(
-        'Đơn hàng không COD được xác nhận khi thanh toán đã được xác minh.',
+        'Non-COD orders are confirmed when payment has been verified.',
       );
     }
 
@@ -274,14 +271,14 @@ export class AdminOrderService {
       },
     });
 
-    const text = `Đơn hàng đã được Admin xác nhận${reason ? '. Ghi chú: ' + reason : ''}`;
+    const text = `Order has been confirmed by Admin${reason ? '. Note: ' + reason : ''}`;
     await this.notifyAsync(
       order.buyer_id,
-      'Đơn hàng được xác nhận',
+      'Order Confirmed',
       text,
     );
 
-    return { success: true, message: 'Đơn hàng đã được xác nhận.' };
+    return { success: true, message: 'Order has been confirmed.' };
   }
 
   /* ────────────── Complete ──────────────────────────────── */
@@ -289,7 +286,7 @@ export class AdminOrderService {
   private async completeOrderAdmin(order: OrderWithRelations, reason?: string) {
     if (order.status !== OrderStatus.CONFIRMED) {
       throw new BadRequestException(
-        'Chỉ đơn hàng đã xác nhận mới có thể hoàn tất.',
+        'Only confirmed orders can be completed.',
       );
     }
 
@@ -299,18 +296,17 @@ export class AdminOrderService {
         data: { status: OrderStatus.COMPLETED },
       });
 
-      // Đánh dấu listing SOLD
       await this.markListingsSold(tx, order);
     });
 
-    const text = `Đơn hàng đã được hoàn tất bởi Admin${reason ? '. Ghi chú: ' + reason : ''}`;
+    const text = `Order has been completed by Admin${reason ? '. Note: ' + reason : ''}`;
     await this.notifyAsync(
       order.listing.seller_id,
-      'Đơn hàng hoàn thành',
+      'Order Completed',
       text,
     );
 
-    return { success: true, message: 'Đơn hàng đã hoàn tất.' };
+    return { success: true, message: 'Order has been completed.' };
   }
 
   /* ────────────── Helpers ───────────────────────────────── */

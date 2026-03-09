@@ -47,16 +47,16 @@ export class AuthService {
 
       return {
         ok: true,
-        message: 'Đăng ký thành công, tài khoản đã được kích hoạt.',
+        message: 'Registration successful, account has been activated.',
       };
     } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('Email/phone đã tồn tại');
+        throw new ConflictException('Email or phone already exists');
       }
-      throw new InternalServerErrorException('Lỗi khi đăng ký');
+      throw new InternalServerErrorException('Registration failed');
     }
   }
 
@@ -69,17 +69,17 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('User không tồn tại');
+      throw new BadRequestException('User does not exist');
     }
 
     if (user.is_verified) {
-      throw new BadRequestException('Tài khoản đã được xác nhận');
+      throw new BadRequestException('Account is already verified');
     }
 
     const isValid = await this.otpService.verifyOtpForUser(user.user_id, otp);
 
     if (!isValid) {
-      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+      throw new BadRequestException('Invalid or expired OTP');
     }
 
     await this.prisma.user.update({
@@ -89,7 +89,7 @@ export class AuthService {
 
     return {
       ok: true,
-      message: 'Xác nhận OTP thành công',
+      message: 'OTP verified successfully',
     };
   }
 
@@ -102,7 +102,7 @@ export class AuthService {
     });
 
     if (!user || !user.is_verified) {
-      throw new BadRequestException('Sai email hoặc mật khẩu');
+      throw new BadRequestException('Invalid email or password');
     }
 
     // 🔐 Kiểm tra tài khoản bị khóa
@@ -115,7 +115,7 @@ export class AuthService {
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      throw new BadRequestException('Sai email hoặc mật khẩu');
+      throw new BadRequestException('Invalid email or password');
     }
 
     await this.prisma.user.update({
@@ -159,7 +159,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new BadRequestException('Email không tồn tại');
+      throw new BadRequestException('Email does not exist');
     }
 
     // 🔐 Kiểm tra tài khoản bị khóa
@@ -184,7 +184,7 @@ export class AuthService {
     return {
       ok: true,
       resetToken,
-      message: 'OTP đã gửi',
+      message: 'OTP sent',
     };
   }
 
@@ -197,7 +197,7 @@ export class AuthService {
     try {
       userId = this.resetTokenService.verify(resetToken);
     } catch {
-      throw new BadRequestException('Reset token không hợp lệ hoặc đã hết hạn');
+      throw new BadRequestException('Invalid or expired reset token');
     }
 
     // 🔐 Kiểm tra tài khoản bị khóa trước khi cho đổi mật khẩu
@@ -216,7 +216,7 @@ export class AuthService {
     const valid = await this.otpService.verifyOtpForUser(userId, otp);
 
     if (!valid) {
-      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
+      throw new BadRequestException('Invalid or expired OTP');
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
@@ -228,7 +228,7 @@ export class AuthService {
 
     return {
       ok: true,
-      message: 'Đổi mật khẩu thành công',
+      message: 'Password changed successfully',
     };
   }
 
@@ -243,7 +243,7 @@ export class AuthService {
         secret: process.env.JWT_REFRESH_SECRET,
       });
     } catch {
-      throw new BadRequestException('Refresh token không hợp lệ');
+      throw new BadRequestException('Invalid refresh token');
     }
 
     const newAccessToken = await this.jwtService.signAsync(

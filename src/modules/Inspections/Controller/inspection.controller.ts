@@ -4,7 +4,7 @@ import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { InspectionService } from '../Service/inspection.service';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { CancelInspectionDto, CreateInspectionDto, InspectionQueryDto, UpdateInspectionDto, UpdateReportDto } from '../DTOs/inspection.dto';
+import { CancelInspectionDto, CreateInspectionDto, InspectionQueryDto, UpdateInspectionDto, UpdateInspectionReportDto } from '../DTOs/inspection.dto';
 import type { Request } from 'express';
 
 // Define interface for user in request
@@ -79,7 +79,7 @@ export class InspectionController {
     @ApiOperation({ summary: 'Inspector cập nhật báo cáo kiểm định' })
     async updateReport(
       @Param('id') id: string,
-      @Body() dto: UpdateReportDto,
+      @Body() dto: UpdateInspectionReportDto,
       @Req() req: RequestWithUser,
     ) {
       return this.inspectionService.updateReport(id, dto, req.user.user_id);

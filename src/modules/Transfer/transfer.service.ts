@@ -146,7 +146,7 @@ export class TransferService {
     });
 
     if (!transfer || transfer.user_id !== userId) {
-      throw new NotFoundException('Không tìm thấy giao dịch chuyển khoản');
+      throw new NotFoundException('Transfer not found');
     }
 
     const synced = await this.syncTransferWithPayos(transfer);
@@ -163,7 +163,7 @@ export class TransferService {
     });
 
     if (!transfer || transfer.user_id !== userId) {
-      throw new NotFoundException('Không tìm thấy giao dịch chuyển khoản');
+      throw new NotFoundException('Transfer not found');
     }
 
     const synced = await this.syncTransferWithPayos(transfer);

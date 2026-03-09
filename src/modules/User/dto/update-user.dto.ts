@@ -9,8 +9,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateUserDto {
   @ApiProperty({
-    description: 'Họ và tên đầy đủ của người dùng',
-    example: 'Nguyễn Văn A',
+    description: 'Full name',
+    example: 'John Doe',
     required: false,
   })
   @IsOptional()
@@ -18,7 +18,7 @@ export class UpdateUserDto {
   full_name?: string;
 
   @ApiProperty({
-    description: 'Số điện thoại',
+    description: 'Phone number',
     example: '0987654321',
     required: false,
   })
@@ -27,7 +27,7 @@ export class UpdateUserDto {
   phone?: string;
 
   @ApiProperty({
-    description: 'Ngày sinh (ISO 8601 format)',
+    description: 'Date of birth (ISO 8601 format)',
     example: '1990-05-15',
     required: false,
   })
@@ -36,7 +36,7 @@ export class UpdateUserDto {
   dob?: string;
 
   @ApiProperty({
-    description: 'Giới tính',
+    description: 'Gender',
     example: 'Male',
     enum: ['Male', 'Female', 'Other'],
     required: false,
@@ -46,7 +46,7 @@ export class UpdateUserDto {
   gender?: string;
 
   @ApiProperty({
-    description: 'Số chứng minh nhân dân / Căn cước công dân',
+    description: 'National ID / Citizen ID',
     example: '001234567890',
     required: false,
   })
@@ -55,7 +55,7 @@ export class UpdateUserDto {
   national_id?: string;
 
   @ApiProperty({
-    description: 'Số tài khoản ngân hàng',
+    description: 'Bank account number',
     example: '1234567890123',
     required: false,
   })
@@ -64,7 +64,7 @@ export class UpdateUserDto {
   bank_account?: string;
 
   @ApiProperty({
-    description: 'Tên ngân hàng',
+    description: 'Bank name',
     example: 'Vietcombank',
     required: false,
   })
@@ -73,7 +73,16 @@ export class UpdateUserDto {
   bank_name?: string;
 
   @ApiProperty({
-    description: 'URL ảnh đại diện',
+    description: 'Bank BIN code',
+    example: '970436',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  bank_bin?: string;
+
+  @ApiProperty({
+    description: 'Avatar URL',
     example: 'https://example.com/avatars/user123.jpg',
     required: false,
   })

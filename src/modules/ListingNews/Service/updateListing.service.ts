@@ -23,12 +23,12 @@ export class UpdateListingService {
       });
 
       if (!listing) {
-        throw new BadRequestException('Listing không tồn tại');
+        throw new BadRequestException('Listing not found');
       }
 
       if (listing.status !== ListingStatus.PENDING_APPROVAL) {
         throw new BadRequestException(
-          'Tin đã được duyệt hoặc bị từ chối, không thể chỉnh sửa',
+          'Listing has been approved or rejected and cannot be edited',
         );
       }
 
@@ -87,7 +87,7 @@ export class UpdateListingService {
       });
 
       return {
-        message: 'Cập nhật tin đăng thành công',
+        message: 'Listing updated successfully',
       };
     });
   }

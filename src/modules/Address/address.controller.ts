@@ -32,9 +32,9 @@ export class AddressController {
   constructor(private readonly addressService: AddressService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Tạo địa chỉ mới' })
-  @ApiResponse({ status: 201, description: 'Địa chỉ được tạo thành công' })
-  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiOperation({ summary: 'Create a new address' })
+  @ApiResponse({ status: 201, description: 'Address created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data' })
   async create(
     @Body() createAddressDto: CreateAddressDto,
     @Req() req: Request & { user: JwtUser },
@@ -43,24 +43,24 @@ export class AddressController {
   }
 
   @Get('my-addresses')
-  @ApiOperation({ summary: 'Lấy tất cả địa chỉ của tôi' })
-  @ApiResponse({ status: 200, description: 'Lấy danh sách địa chỉ thành công' })
+  @ApiOperation({ summary: 'Get all my addresses' })
+  @ApiResponse({ status: 200, description: 'Addresses retrieved successfully' })
   async getMyAddresses(@Req() req: Request & { user: JwtUser }) {
     return this.addressService.getMyAddresses(req.user.user_id);
   }
 
   @Get('default')
-  @ApiOperation({ summary: 'Lấy địa chỉ mặc định' })
-  @ApiResponse({ status: 200, description: 'Lấy địa chỉ mặc định thành công' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy địa chỉ' })
+  @ApiOperation({ summary: 'Get default address' })
+  @ApiResponse({ status: 200, description: 'Default address retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
   async getDefaultAddress(@Req() req: Request & { user: JwtUser }) {
     return this.addressService.getDefaultAddress(req.user.user_id);
   }
 
   @Get(':addressId')
-  @ApiOperation({ summary: 'Lấy chi tiết một địa chỉ' })
-  @ApiResponse({ status: 200, description: 'Lấy địa chỉ thành công' })
-  @ApiResponse({ status: 404, description: 'Địa chỉ không tồn tại' })
+  @ApiOperation({ summary: 'Get address details' })
+  @ApiResponse({ status: 200, description: 'Address retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
   async getAddressById(
     @Param('addressId') addressId: string,
     @Req() req: Request & { user: JwtUser },
@@ -69,9 +69,9 @@ export class AddressController {
   }
 
   @Patch(':addressId')
-  @ApiOperation({ summary: 'Cập nhật địa chỉ' })
-  @ApiResponse({ status: 200, description: 'Cập nhật địa chỉ thành công' })
-  @ApiResponse({ status: 404, description: 'Địa chỉ không tồn tại' })
+  @ApiOperation({ summary: 'Update address' })
+  @ApiResponse({ status: 200, description: 'Address updated successfully' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
   async update(
     @Param('addressId') addressId: string,
     @Body() updateAddressDto: UpdateAddressDto,
@@ -85,9 +85,9 @@ export class AddressController {
   }
 
   @Patch(':addressId/set-default')
-  @ApiOperation({ summary: 'Đặt địa chỉ làm mặc định' })
-  @ApiResponse({ status: 200, description: 'Đặt địa chỉ mặc định thành công' })
-  @ApiResponse({ status: 404, description: 'Địa chỉ không tồn tại' })
+  @ApiOperation({ summary: 'Set address as default' })
+  @ApiResponse({ status: 200, description: 'Default address set successfully' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
   async setAsDefault(
     @Param('addressId') addressId: string,
     @Req() req: Request & { user: JwtUser },
@@ -97,9 +97,9 @@ export class AddressController {
 
   @Delete(':addressId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Xóa địa chỉ' })
-  @ApiResponse({ status: 200, description: 'Xóa địa chỉ thành công' })
-  @ApiResponse({ status: 404, description: 'Địa chỉ không tồn tại' })
+  @ApiOperation({ summary: 'Delete address' })
+  @ApiResponse({ status: 200, description: 'Address deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Address not found' })
   async delete(
     @Param('addressId') addressId: string,
     @Req() req: Request & { user: JwtUser },

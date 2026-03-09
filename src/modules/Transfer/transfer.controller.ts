@@ -32,8 +32,8 @@ export class TransferController {
 
   @Post()
   @Roles(2, 3)
-  @ApiOperation({ summary: 'Tạo payout PayOS cho 1 người nhận' })
-  @ApiResponse({ status: 201, description: 'Tạo chuyển khoản thành công' })
+  @ApiOperation({ summary: 'Create payout for 1 recipient' })
+  @ApiResponse({ status: 201, description: 'Transfer created successfully' })
   async createTransfer(
     @Body() dto: CreateTransferDto,
     @Req() req: Request & { user: JwtUser },
@@ -43,7 +43,7 @@ export class TransferController {
 
   @Post('batch')
   @Roles(2, 3)
-  @ApiOperation({ summary: 'Tạo payout PayOS theo danh sách người nhận' })
+  @ApiOperation({ summary: 'Create batch payout for multiple recipients' })
   async createBatchTransfer(
     @Body() dto: CreateBatchTransferDto,
     @Req() req: Request & { user: JwtUser },
@@ -51,19 +51,30 @@ export class TransferController {
     return this.transferService.createBatchTransfer(req.user.user_id, dto);
   }
 
-  @Get(':transferId')
+  @Post('estimate-credit')
   @Roles(2, 3)
-  @ApiOperation({ summary: 'Lấy chi tiết chuyển khoản theo ID' })
-  async getTransfer(
-    @Param('transferId') transferId: string,
-    @Req() req: Request & { user: JwtUser },
-  ) {
-    return this.transferService.getTransferById(transferId, req.user.user_id);
+  @ApiOperation({ summary: 'Estimate credit needed for batch payout' })
+  async estimateCredit(@Body() dto: EstimateCreditDto) {
+    return this.transferService.estimateCredit(dto);
+  }
+
+  @Get()
+  @Roles(2, 3)
+  @ApiOperation({ summary: 'Get transfer list for current admin' })
+  async getTransfers(@Req() req: Request & { user: JwtUser }) {
+    return this.transferService.getTransfersForUser(req.user.user_id);
+  }
+
+  @Get('account-balance')
+  @Roles(2, 3)
+  @ApiOperation({ summary: 'Get PayOS payout account balance' })
+  async getAccountBalance() {
+    return this.transferService.getAccountBalance();
   }
 
   @Get('reference/:referenceId')
   @Roles(2, 3)
-  @ApiOperation({ summary: 'Lấy chi tiết chuyển khoản theo mã reference' })
+  @ApiOperation({ summary: 'Get transfer details by reference code' })
   async getTransferByReference(
     @Param('referenceId') referenceId: string,
     @Req() req: Request & { user: JwtUser },
@@ -74,24 +85,13 @@ export class TransferController {
     );
   }
 
-  @Get()
+  @Get(':transferId')
   @Roles(2, 3)
-  @ApiOperation({ summary: 'Lấy danh sách chuyển khoản của admin hiện tại' })
-  async getTransfers(@Req() req: Request & { user: JwtUser }) {
-    return this.transferService.getTransfersForUser(req.user.user_id);
-  }
-
-  @Get('account-balance')
-  @Roles(2, 3)
-  @ApiOperation({ summary: 'Lấy số dư tài khoản PayOS payouts' })
-  async getAccountBalance() {
-    return this.transferService.getAccountBalance();
-  }
-
-  @Post('estimate-credit')
-  @Roles(2, 3)
-  @ApiOperation({ summary: 'Ước tính hạn mức cần thiết cho batch payout' })
-  async estimateCredit(@Body() dto: EstimateCreditDto) {
-    return this.transferService.estimateCredit(dto);
+  @ApiOperation({ summary: 'Get transfer details by ID' })
+  async getTransfer(
+    @Param('transferId') transferId: string,
+    @Req() req: Request & { user: JwtUser },
+  ) {
+    return this.transferService.getTransferById(transferId, req.user.user_id);
   }
 }

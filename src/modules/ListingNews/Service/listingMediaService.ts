@@ -17,14 +17,14 @@ export class ListingMediaService {
     });
 
     if (!listing) {
-      throw new BadRequestException('Listing không tồn tại');
+      throw new BadRequestException('Listing not found');
     }
 
     if (
       listing.status === ListingStatus.SOLD ||
       listing.status === ListingStatus.HIDDEN
     ) {
-      throw new BadRequestException('Listing không thể chỉnh sửa media');
+      throw new BadRequestException('Listing media cannot be edited');
     }
   }
 
@@ -34,7 +34,7 @@ export class ListingMediaService {
     });
 
     if (!media) {
-      throw new BadRequestException('Media không tồn tại');
+      throw new BadRequestException('Media not found');
     }
 
     return media;
@@ -69,7 +69,7 @@ export class ListingMediaService {
     });
 
     if (count + files.length > 10) {
-      throw new BadRequestException('Mỗi tin tối đa 10 ảnh');
+      throw new BadRequestException('Maximum 10 images per listing');
     }
 
     const hasCover = await this.prisma.listingMedia.findFirst({
@@ -111,7 +111,7 @@ export class ListingMediaService {
       }),
     ]);
 
-    return { message: 'Đã đặt ảnh đại diện' };
+    return { message: 'Cover image set successfully' };
   }
 
   // ==========================
@@ -162,7 +162,7 @@ export class ListingMediaService {
       }
     }
 
-    return { message: 'Xóa media thành công' };
+    return { message: 'Media deleted successfully' };
   }
 
   // ==========================
@@ -170,7 +170,7 @@ export class ListingMediaService {
   // ==========================
   async deleteMany(mediaIds: string[]) {
     if (!mediaIds.length) {
-      throw new BadRequestException('Danh sách media rỗng');
+      throw new BadRequestException('Media list is empty');
     }
 
     const medias = await this.prisma.listingMedia.findMany({
@@ -178,7 +178,7 @@ export class ListingMediaService {
     });
 
     if (!medias.length) {
-      throw new BadRequestException('Media không tồn tại');
+      throw new BadRequestException('Media not found');
     }
 
     const listingId = medias[0].listing_id;
@@ -204,6 +204,6 @@ export class ListingMediaService {
       }
     }
 
-    return { message: 'Xóa nhiều media thành công' };
+    return { message: 'Multiple media deleted successfully' };
   }
 }

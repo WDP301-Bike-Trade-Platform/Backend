@@ -96,17 +96,16 @@ export class ChatService {
   ): Promise<ChatThreadResponse> {
     if (dto.otherUserId === userId) {
       throw new BadRequestException(
-        'Bạn không thể tạo cuộc trò chuyện với chính mình.',
+        'You cannot create a chat with yourself.',
       );
     }
 
-    // Kiểm tra user kia có tồn tại không
     const otherUser = await this.prisma.user.findUnique({
       where: { user_id: dto.otherUserId },
       include: { profile: true },
     });
     if (!otherUser) {
-      throw new NotFoundException('Không tìm thấy người dùng.');
+      throw new NotFoundException('User not found.');
     }
 
     // Tìm cuộc trò chuyện đã có
@@ -174,7 +173,7 @@ export class ChatService {
       },
     });
     if (!chat) {
-      throw new NotFoundException('Không tìm thấy cuộc trò chuyện.');
+      throw new NotFoundException('Chat not found.');
     }
 
     const skip = query.skip ?? 0;
@@ -211,7 +210,7 @@ export class ChatService {
   ): Promise<{ success: boolean; message: string; data: MessageResponse }> {
     if (!dto.content?.trim() && !dto.imageUrl?.trim()) {
       throw new BadRequestException(
-        'Nội dung hoặc hình ảnh không được để trống.',
+        'Content or image must not be empty.',
       );
     }
 
@@ -222,7 +221,7 @@ export class ChatService {
       },
     });
     if (!chat) {
-      throw new NotFoundException('Không tìm thấy cuộc trò chuyện.');
+      throw new NotFoundException('Chat not found.');
     }
 
     const msg = await this.prisma.message.create({
@@ -239,14 +238,14 @@ export class ChatService {
       chat.user1_id === userId ? chat.user2_id : chat.user1_id;
     await this.notifyAsync(
       receiverId,
-      'Tin nhắn mới',
-      'Bạn có tin nhắn mới.',
+      'New message',
+      'You have a new message.',
       `/chat/${chatId}`,
     );
 
     return {
       success: true,
-      message: 'Đã gửi tin nhắn.',
+      message: 'Message sent.',
       data: {
         messageId: msg.message_id,
         chatId: msg.chat_id!,

@@ -43,6 +43,15 @@ async function bootstrap() {
 
   console.log(` Server running at ${host}:${port}`);
   console.log(` Swagger docs at ${host}:${port}/api`);
+
+  // Log outbound IP so it can be whitelisted in PayOS
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    const data = (await res.json()) as { ip: string };
+    console.log(`🌐 Outbound IP (add to PayOS whitelist): ${data.ip}`);
+  } catch {
+    console.warn('⚠️  Could not determine outbound IP');
+  }
 }
 
 bootstrap().catch((err) => {

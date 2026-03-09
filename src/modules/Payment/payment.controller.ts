@@ -39,7 +39,7 @@ export class PaymentController {
   }
 
   @Post('create-for-listing')
-  @ApiOperation({ summary: 'Tạo payment link cho listing' })
+  @ApiOperation({ summary: 'Create payment link for listing' })
   async createPaymentForListing(
     @Body() createPaymentLinkDto: CreatePaymentLinkDto,
     @Req() req: Request & { user: JwtUser },
@@ -52,10 +52,10 @@ export class PaymentController {
   }
 
   @Post('create-for-order')
-  @ApiOperation({ summary: 'Tạo payment link cho order (nhiều items)' })
-  @ApiResponse({ status: 201, description: 'Payment link được tạo thành công' })
-  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
-  @ApiResponse({ status: 404, description: 'Order không tồn tại' })
+  @ApiOperation({ summary: 'Create payment link for order (multiple items)' })
+  @ApiResponse({ status: 201, description: 'Payment link created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
   async createPaymentForOrder(
     @Body() dto: CreatePaymentLinkForOrderDto,
     @Req() req: Request & { user: JwtUser },
@@ -65,17 +65,17 @@ export class PaymentController {
   }
 
   @Get('info/:orderCode')
-  @ApiOperation({ summary: 'Lấy thông tin thanh toán theo order code' })
-  @ApiResponse({ status: 200, description: 'Lấy thông tin thành công' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy thanh toán' })
+  @ApiOperation({ summary: 'Get payment info by order code' })
+  @ApiResponse({ status: 200, description: 'Payment info retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Payment not found' })
   async getPaymentInfo(@Param('orderCode', ParseIntPipe) orderCode: number) {
     return this.paymentService.getPaymentInfo(orderCode);
   }
 
   @Post('cancel')
-  @ApiOperation({ summary: 'Hủy payment link' })
-  @ApiResponse({ status: 200, description: 'Hủy thanh toán thành công' })
-  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+  @ApiOperation({ summary: 'Cancel payment link' })
+  @ApiResponse({ status: 200, description: 'Payment cancelled successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid data' })
   async cancelPayment(@Body() cancelPaymentDto: CancelPaymentDto) {
     return this.paymentService.cancelPaymentLink(
       cancelPaymentDto.orderCode,
@@ -86,8 +86,8 @@ export class PaymentController {
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Webhook từ PayOS - Xác thực payment' })
-  @ApiResponse({ status: 200, description: 'Webhook xác thực thành công' })
+  @ApiOperation({ summary: 'PayOS Webhook - Verify payment' })
+  @ApiResponse({ status: 200, description: 'Webhook verified successfully' })
   async handleWebhook(@Body() webhookData: PaymentWebhookDto) {
     // Xác thực webhook
     const result = await this.paymentService.handleWebhook(webhookData);
@@ -113,7 +113,7 @@ export class PaymentController {
    */
   @Public()
   @Get('redirect/success')
-  @ApiOperation({ summary: 'Redirect từ PayOS checkout sang deep link (success)' })
+  @ApiOperation({ summary: 'Redirect from PayOS checkout to deep link (success)' })
   redirectSuccess(
     @Query('orderId') orderId: string,
     @Query('orderCode') orderCode: string,
@@ -128,7 +128,7 @@ export class PaymentController {
    */
   @Public()
   @Get('redirect/cancel')
-  @ApiOperation({ summary: 'Redirect từ PayOS checkout sang deep link (cancel)' })
+  @ApiOperation({ summary: 'Redirect from PayOS checkout to deep link (cancel)' })
   redirectCancel(
     @Query('orderId') orderId: string,
     @Res() res: Response,

@@ -20,25 +20,25 @@ export class AdminListingService {
     });
 
     if (!listing) {
-      throw new BadRequestException('Listing không tồn tại');
+      throw new BadRequestException('Listing not found');
     }
 
     if (listing.status !== ListingStatus.PENDING_APPROVAL) {
-      throw new BadRequestException('Listing không ở trạng thái chờ duyệt');
+      throw new BadRequestException('Listing is not pending approval');
     }
 
-    // 🔥 1. Check banned keywords
+    // 1. Check banned keywords
     const violatedKeyword = this.detectBannedKeyword(listing);
 
     if (violatedKeyword) {
       await this.autoReject(
         listingId,
         adminId,
-        `Chứa từ cấm: "${violatedKeyword}"`,
+        `Contains banned keyword: "${violatedKeyword}"`,
       );
 
       throw new BadRequestException(
-        `Tin bị từ chối do chứa từ cấm: "${violatedKeyword}"`,
+        `Listing rejected due to banned keyword: "${violatedKeyword}"`,
       );
     }
 
@@ -59,7 +59,7 @@ export class AdminListingService {
     });
 
     return {
-      message: 'Duyệt tin thành công',
+      message: 'Listing approved successfully',
       expires_at: expiresAt,
     };
   }
@@ -73,16 +73,16 @@ export class AdminListingService {
     });
 
     if (!listing) {
-      throw new BadRequestException('Listing không tồn tại');
+      throw new BadRequestException('Listing not found');
     }
 
     if (listing.status !== ListingStatus.PENDING_APPROVAL) {
-      throw new BadRequestException('Listing không ở trạng thái chờ duyệt');
+      throw new BadRequestException('Listing is not pending approval');
     }
 
     await this.autoReject(listingId, adminId, note);
 
-    return { message: 'Từ chối tin đăng thành công' };
+    return { message: 'Listing rejected successfully' };
   }
 
   // ==========================
