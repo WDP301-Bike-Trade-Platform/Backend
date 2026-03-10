@@ -15,7 +15,7 @@ export class UserService {
    */
   async getProfile(userId: string) {
     if (!userId) {
-      throw new BadRequestException('User ID không hợp lệ');
+      throw new BadRequestException('Invalid user ID');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -38,6 +38,7 @@ export class UserService {
             national_id: true,
             bank_account: true,
             bank_name: true,
+            bank_bin: true,
             avatar_url: true,
             created_at: true,
           },
@@ -46,7 +47,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng');
+      throw new NotFoundException('User not found');
     }
 
     return {
@@ -74,17 +75,17 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('Không tìm thấy người dùng');
+      throw new NotFoundException('User not found');
     }
 
-    // Kiểm tra phone trùng lặp (nếu có thay đổi)
+    // Check for duplicate phone number
     if (dto.phone && dto.phone !== user.phone) {
       const existingPhone = await this.prisma.user.findUnique({
         where: { phone: dto.phone },
       });
 
       if (existingPhone) {
-        throw new BadRequestException('Số điện thoại đã được sử dụng');
+        throw new BadRequestException('Phone number is already in use');
       }
     }
 
@@ -108,6 +109,7 @@ export class UserService {
       if (dto.national_id !== undefined) updateData.national_id = dto.national_id;
       if (dto.bank_account !== undefined) updateData.bank_account = dto.bank_account;
       if (dto.bank_name !== undefined) updateData.bank_name = dto.bank_name;
+      if (dto.bank_bin !== undefined) updateData.bank_bin = dto.bank_bin;
       if (dto.avatar_url !== undefined) updateData.avatar_url = dto.avatar_url;
 
       updatedProfile = await this.prisma.userProfile.update({
@@ -124,6 +126,7 @@ export class UserService {
           national_id: dto.national_id || null,
           bank_account: dto.bank_account || null,
           bank_name: dto.bank_name || null,
+          bank_bin: dto.bank_bin || null,
           avatar_url: dto.avatar_url || null,
           created_at: new Date(),
         },
@@ -132,7 +135,7 @@ export class UserService {
 
     return {
       ok: true,
-      message: 'Cập nhật profile thành công',
+      message: 'Profile updated successfully',
       data: {
         ...updatedUser,
         created_at: updatedUser.created_at?.toISOString(),

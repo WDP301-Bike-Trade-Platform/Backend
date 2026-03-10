@@ -19,7 +19,7 @@ export class ChangeListingStatusService {
       case SellerListingAction.MARK_SOLD:
         return ListingStatus.SOLD;
       default:
-        throw new BadRequestException('Action không hợp lệ');
+        throw new BadRequestException('Invalid action');
     }
   }
 
@@ -36,16 +36,15 @@ export class ChangeListingStatusService {
     });
 
     if (!listing) {
-      throw new BadRequestException('Listing không tồn tại');
+      throw new BadRequestException('Listing not found');
     }
 
-    // ❗ Seller CHỈ được thao tác khi đã APPROVED
     if (
       listing.status !== ListingStatus.APPROVED &&
       listing.status !== ListingStatus.ACTIVE &&
       listing.status !== ListingStatus.HIDDEN
     ) {
-      throw new BadRequestException('Tin chưa được duyệt hoặc đã hết hiệu lực');
+      throw new BadRequestException('Listing is not approved or has expired');
     }
 
     const nextStatus = this.mapActionToStatus(dto.action);
@@ -59,7 +58,7 @@ export class ChangeListingStatusService {
     });
 
     return {
-      message: 'Cập nhật trạng thái tin thành công',
+      message: 'Listing status updated successfully',
       status: nextStatus,
     };
   }

@@ -18,6 +18,7 @@ export class UserProfileDto {
   national_id: string | null;
   bank_account: string | null;
   bank_name: string | null;
+  bank_bin: string | null;
   avatar_url: string | null;
   created_at: Date;
 }

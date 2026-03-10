@@ -80,17 +80,17 @@ export class OtpDbService extends OtpService {
       const sendMailPromise = transporter.sendMail({
         from: `"MyApp Security" <${process.env.GMAIL_USER}>`,
         to: email,
-        subject: 'Xác nhận OTP của bạn',
+        subject: 'Your OTP Verification Code',
         html: `
       <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:40px 0">
         <div style="max-width:480px; margin:auto; background:#ffffff; border-radius:12px; padding:32px; box-shadow:0 10px 30px rgba(0,0,0,0.08)">
           
           <h2 style="text-align:center; color:#111827; margin-bottom:8px">
-            Xác nhận OTP
+            OTP Verification
           </h2>
 
           <p style="text-align:center; color:#6b7280; font-size:14px; margin-bottom:32px">
-            Mã xác nhận của bạn có hiệu lực trong <b>5 phút</b>
+            Your verification code is valid for <b>5 minutes</b>
           </p>
 
           <div style="
@@ -108,7 +108,7 @@ export class OtpDbService extends OtpService {
           </div>
 
           <p style="font-size:14px; color:#374151; line-height:1.6">
-            Nếu bạn <b>không yêu cầu</b> mã này, hãy bỏ qua email này.
+            If you <b>did not request</b> this code, please ignore this email.
           </p>
 
           <hr style="margin:32px 0; border:none; border-top:1px solid #e5e7eb" />

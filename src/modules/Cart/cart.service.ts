@@ -160,7 +160,7 @@ export class CartService {
 
     return {
       success: true,
-      message: 'Sản phẩm đã được thêm vào giỏ hàng thành công',
+      message: 'Item added to cart successfully',
       data: payload,
     };
   }
@@ -251,7 +251,7 @@ export class CartService {
 
     return {
       success: true,
-      message: 'Số lượng sản phẩm đã được cập nhật thành công',
+      message: 'Cart item quantity updated successfully',
       data: updatedItem,
     };
   }
@@ -283,7 +283,7 @@ export class CartService {
 
     return {
       success: true,
-      message: 'Sản phẩm đã được xóa khỏi giỏ hàng thành công',
+      message: 'Item removed from cart successfully',
     };
   }
 

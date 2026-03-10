@@ -8,6 +8,38 @@ export class CreateListingService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createListing(dto: CreateListingDto, sellerId: string) {
+    // Check profile completeness before allowing listing creation
+    const seller = await this.prisma.user.findUnique({
+      where: { user_id: sellerId },
+      include: { profile: true },
+    });
+
+    if (!seller) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (!seller.full_name || !seller.phone) {
+      throw new BadRequestException(
+        'Please complete your profile (full name, phone) before creating a listing',
+      );
+    }
+
+    const profile = seller.profile;
+    if (
+      !profile ||
+      !profile.dob ||
+      !profile.gender ||
+      !profile.national_id ||
+      !profile.avatar_url ||
+      !profile.bank_account ||
+      !profile.bank_name ||
+      !profile.bank_bin
+    ) {
+      throw new BadRequestException(
+        'Please complete your profile (date of birth, gender, national ID, avatar) before creating a listing',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const sanitizeOptional = (value?: string | null) => {
         if (value === undefined || value === null) {
@@ -17,7 +49,7 @@ export class CreateListingService {
         return trimmed.length ? trimmed : undefined;
       };
 
-      // 🚫 0️⃣ CHECK: user có listing đang chờ duyệt không
+      // Check: user has a listing pending approval
       const pendingListing = await tx.listing.findFirst({
         where: {
           seller_id: sellerId,
@@ -30,11 +62,11 @@ export class CreateListingService {
 
       if (pendingListing) {
         throw new BadRequestException(
-          'Bạn đang có tin đăng chờ duyệt. Vui lòng đợi admin duyệt trước khi đăng tin mới.',
+          'You already have a listing pending approval. Please wait for admin review before creating a new one.',
         );
       }
 
-      // 1️⃣ Category fallback = "Khác"
+      // Category fallback = "Khác" (Other)
       let categoryId = sanitizeOptional(dto.category_id);
 
       if (!categoryId) {
@@ -43,14 +75,14 @@ export class CreateListingService {
         });
 
         if (!otherCategory) {
-          throw new BadRequestException('Category "Khác" không tồn tại');
+          throw new BadRequestException('Default category not found');
         }
 
         categoryId = otherCategory.category_id;
       }
 
       if (!categoryId) {
-        throw new BadRequestException('Không xác định được category hợp lệ');
+        throw new BadRequestException('Could not determine a valid category');
       }
 
       // 2️⃣ Tạo Vehicle
@@ -108,7 +140,7 @@ export class CreateListingService {
       });
 
       return {
-        message: 'Đăng tin bán thành công, chờ admin duyệt',
+        message: 'Listing created successfully, pending admin approval',
         listing_id: listing.listing_id,
       };
     });

@@ -20,6 +20,7 @@ import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { JwtUser } from 'src/common/types/types';
 import { ChatService } from './chat.service';
+import { ChatGateway } from './chat.gateway';
 import { CreateChatDto } from './dto/create-chat.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ChatMessageQueryDto } from './dto/chat-query.dto';
@@ -29,7 +30,10 @@ import { ChatMessageQueryDto } from './dto/chat-query.dto';
 @Controller('chats')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly chatGateway: ChatGateway,
+  ) {}
 
   @Get()
   @Roles(1)
@@ -81,6 +85,9 @@ export class ChatController {
     @Param('chatId') chatId: string,
     @Body() dto: SendMessageDto,
   ) {
-    return this.chatService.sendMessage(req.user.user_id, chatId, dto);
+    const result = await this.chatService.sendMessage(req.user.user_id, chatId, dto);
+    // Broadcast qua Socket.IO cho real-time
+    this.chatGateway.emitNewMessage(chatId, result.data);
+    return result;
   }
 }
