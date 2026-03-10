@@ -4,10 +4,15 @@ import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { InspectionService } from '../Service/inspection.service';
 import { Roles } from 'src/common/decorators/roles.decorator';
-import { CancelInspectionDto, CreateInspectionDto, InspectionQueryDto, UpdateInspectionDto, UpdateInspectionReportDto } from '../DTOs/inspection.dto';
+import {
+  CancelInspectionDto,
+  CreateInspectionDto,
+  InspectionQueryDto,
+  UpdateInspectionDto,
+  UpdateReportDto,
+} from '../DTOs/inspection.dto';
 import type { Request } from 'express';
 
-// Define interface for user in request
 interface RequestWithUser extends Request {
   user: {
     user_id: string;
@@ -26,11 +31,11 @@ export class InspectionController {
   @Roles(1)
   @ApiOperation({ summary: 'Tạo yêu cầu kiểm định - user' })
   async create(@Req() req: RequestWithUser, @Body() dto: CreateInspectionDto) {
-    const userId = req.user.user_id;
-    return this.inspectionService.create(userId, dto);
+    return this.inspectionService.create(req.user.user_id, dto);
   }
+
   @Patch(':id/cancel')
-  @Roles(1, 2, 3) // USER, INSPECTOR, ADMIN đều có thể gọi (service tự kiểm tra quyền cụ thể)
+  @Roles(1, 2, 3)
   @ApiOperation({ summary: 'Hủy yêu cầu kiểm định (theo quy định phân quyền)' })
   async cancel(
     @Param('id') id: string,
@@ -39,26 +44,24 @@ export class InspectionController {
   ) {
     return this.inspectionService.cancel(id, req.user.user_id, req.user.role_id, dto);
   }
-  @Roles(1)
+
   @Get('my-requests')
+  @Roles(1)
   @ApiOperation({ summary: 'Lấy danh sách yêu cầu kiểm định do chính người dùng tạo' })
   async findMyRequests(@Req() req: RequestWithUser, @Query() query: InspectionQueryDto) {
     return this.inspectionService.findMyRequests(req.user.user_id, query);
   }
+
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách inspections - all' })
   async findAll(@Req() req: RequestWithUser, @Query() query: InspectionQueryDto) {
-    const userId = req.user.user_id;
-    const roleId = req.user.role_id;
-    return this.inspectionService.findAll(userId, roleId, query);
+    return this.inspectionService.findAll(req.user.user_id, req.user.role_id, query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Lấy chi tiết một inspection - all' })
   async findOne(@Param('id') id: string, @Req() req: RequestWithUser) {
-    const userId = req.user.user_id;
-    const roleId = req.user.role_id;
-    return this.inspectionService.findOne(id, userId, roleId);
+    return this.inspectionService.findOne(id, req.user.user_id, req.user.role_id);
   }
 
   @Patch(':id')
@@ -69,19 +72,27 @@ export class InspectionController {
     @Body() dto: UpdateInspectionDto,
     @Req() req: RequestWithUser,
   ) {
-    const userId = req.user.user_id;
-    const roleId = req.user.role_id;
-    return this.inspectionService.update(id, dto, userId, roleId);
+    return this.inspectionService.update(id, dto, req.user.user_id, req.user.role_id);
   }
 
-    @Patch(':id/report')
-    @Roles(2)
-    @ApiOperation({ summary: 'Inspector cập nhật báo cáo kiểm định' })
-    async updateReport(
-      @Param('id') id: string,
-      @Body() dto: UpdateInspectionReportDto,
-      @Req() req: RequestWithUser,
-    ) {
-      return this.inspectionService.updateReport(id, dto, req.user.user_id);
-    }
+  @Patch(':id/report')
+  @Roles(2)
+  @ApiOperation({ summary: 'Inspector cập nhật báo cáo kiểm định' })
+  async updateReport(
+    @Param('id') id: string,
+    @Body() dto: UpdateReportDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.inspectionService.updateReport(id, dto, req.user.user_id);
+  }
+
+  /**
+   * Inspector tự nhận một inspection đang PENDING (chưa có ai nhận)
+   */
+  @Post(':id/assign')
+  @Roles(2)
+  @ApiOperation({ summary: 'Inspector tự nhận inspection' })
+  async assignToSelf(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.inspectionService.assignToSelf(id, req.user.user_id);
+  }
 }
