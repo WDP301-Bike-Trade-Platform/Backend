@@ -85,7 +85,7 @@ export class CancelInspectionDto {
   @IsString()
   cancelReason?: string;
 }
-export class UpdateInspectionReportDto {
+export class UpdateReportDto {
   @ApiPropertyOptional({ enum: InspectionStatus })
   @IsOptional()
   @IsEnum(InspectionStatus)

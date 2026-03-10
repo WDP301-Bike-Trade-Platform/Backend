@@ -9,7 +9,7 @@ import {
   CreateInspectionDto,
   InspectionQueryDto,
   UpdateInspectionDto,
-  UpdateInspectionReportDto as UpdateReportDto,
+  UpdateReportDto,
 } from '../DTOs/inspection.dto';
 import type { Request } from 'express';
 
