@@ -16,6 +16,11 @@ export class CreateInspectionDto {
   @ApiProperty({ description: 'ID của listing cần kiểm định' })
   @IsUUID()
   listingId: string;
+
+  @ApiPropertyOptional({ description: 'Thời gian hẹn kiểm định (ISO 8601)' })
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
 }
 
 export class UpdateInspectionDto {
@@ -80,11 +85,14 @@ export class InspectionQueryDto {
   @Min(1)
   limit?: number = 10;
 }
+
 export class CancelInspectionDto {
   @IsOptional()
   @IsString()
   cancelReason?: string;
 }
+
+// DTO riêng cho cập nhật báo cáo (có thể dùng lại Pick từ UpdateInspectionDto)
 export class UpdateReportDto {
   @ApiPropertyOptional({ enum: InspectionStatus })
   @IsOptional()
