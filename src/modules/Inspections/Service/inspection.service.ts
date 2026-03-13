@@ -35,7 +35,7 @@ export class InspectionService {
       data: {
         listing_id: dto.listingId,
         requested_by_id: userId,
-        scheduled_at: dto.scheduledAt, // cho phép đặt lịch ngay khi tạo
+        scheduled_at: dto.scheduledAt,
         request_status: InspectionRequestStatus.PENDING,
       },
       include: {
@@ -246,110 +246,128 @@ export class InspectionService {
   }
 
   // ==================== CANCEL ====================
-  async cancel(
-    id: string,
-    userId: string,
-    userRoleId: number,
-    dto?: CancelInspectionDto,
-  ) {
-    // Xây dựng điều kiện where dựa trên role
-    let whereCondition: any = { inspection_id: id };
+// ==================== CANCEL ====================
+async cancel(
+  id: string,
+  userId: string,
+  userRoleId: number,
+  dto?: CancelInspectionDto,
+) {
+  // Bắt buộc phải có lý do hủy
+  if (!dto?.cancelReason) {
+    throw new BadRequestException('Vui lòng cung cấp lý do hủy');
+  }
 
-    if (userRoleId === 1) {
-      // USER: chỉ hủy khi là người yêu cầu và đang PENDING
-      whereCondition.requested_by_id = userId;
-      whereCondition.request_status = InspectionRequestStatus.PENDING;
-    } else if (userRoleId === 2) {
-      // INSPECTOR: chỉ hủy khi là inspector được gán và đang PENDING hoặc CONFIRMED
-      whereCondition.inspector_id = userId;
-      whereCondition.request_status = {
-        in: [
-          InspectionRequestStatus.PENDING,
-          InspectionRequestStatus.CONFIRMED,
-        ],
-      };
-    } else if (userRoleId === 3) {
-      // ADMIN: hủy bất kỳ đang PENDING hoặc CONFIRMED
-      whereCondition.request_status = {
-        in: [
-          InspectionRequestStatus.PENDING,
-          InspectionRequestStatus.CONFIRMED,
-        ],
-      };
-    } else {
-      throw new ForbiddenException('Bạn không có quyền hủy inspection');
-    }
+  // Xây dựng điều kiện where và data update dựa trên role
+  let whereCondition: any = { inspection_id: id };
+  let updateData: any = {};
+  let notificationTitle = '';
+  let notificationMessage = '';
 
-    try {
-      const inspection = await this.prisma.$transaction(async (prisma) => {
-        // Lấy thông tin hiện tại để biết ai liên quan (cần cho notification)
-        const current = await prisma.inspection.findUnique({
-          where: { inspection_id: id },
-          include: {
-            requester: { select: { user_id: true, full_name: true } },
-            inspector: { select: { user_id: true, full_name: true } },
-          },
-        });
-        if (!current) throw new NotFoundException();
+  if (userRoleId === 1) {
+    // USER: chỉ hủy khi là người yêu cầu và đang PENDING -> chuyển CANCELLED
+    whereCondition.requested_by_id = userId;
+    whereCondition.request_status = InspectionRequestStatus.PENDING;
+    updateData.request_status = InspectionRequestStatus.CANCELLED;
+    updateData.notes = `Người dùng hủy: ${dto.cancelReason}`;
+    notificationTitle = 'Yêu cầu kiểm định đã bị hủy';
+    notificationMessage = `Yêu cầu kiểm định cho listing đã bị hủy.`;
+  } else if (userRoleId === 2) {
+    // INSPECTOR: chỉ hủy khi là inspector được gán và đang PENDING hoặc CONFIRMED
+    // => reset về PENDING, xóa inspector_id
+    whereCondition.inspector_id = userId;
+    whereCondition.request_status = {
+      in: [
+        InspectionRequestStatus.PENDING,
+        InspectionRequestStatus.CONFIRMED,
+      ],
+    };
+    updateData.request_status = InspectionRequestStatus.PENDING;
+    updateData.inspector_id = null;
+    updateData.notes = `Inspector hủy nhận: ${dto.cancelReason}`;
+    notificationTitle = 'Inspector đã hủy nhận đơn kiểm định';
+    notificationMessage = `Inspector đã hủy nhận đơn. Đơn đang chờ được tiếp nhận lại.`;
+  } else if (userRoleId === 3) {
+    // ADMIN: hủy bất kỳ đang PENDING hoặc CONFIRMED -> CANCELLED
+    whereCondition.request_status = {
+      in: [
+        InspectionRequestStatus.PENDING,
+        InspectionRequestStatus.CONFIRMED,
+      ],
+    };
+    updateData.request_status = InspectionRequestStatus.CANCELLED;
+    updateData.notes = `Admin hủy: ${dto.cancelReason}`;
+    notificationTitle = 'Yêu cầu kiểm định đã bị hủy bởi quản trị viên';
+    notificationMessage = `Yêu cầu kiểm định đã bị hủy bởi quản trị viên.`;
+  } else {
+    throw new ForbiddenException('Bạn không có quyền hủy inspection');
+  }
 
-        // Thực hiện hủy
-        const updated = await prisma.inspection.update({
-          where: whereCondition,
-          data: {
-            request_status: InspectionRequestStatus.CANCELLED,
-            notes: dto?.cancelReason
-              ? `Hủy bởi người dùng: ${dto.cancelReason}`
-              : undefined,
-          },
-          include: {
-            requester: { select: { user_id: true, full_name: true } },
-            inspector: { select: { user_id: true, full_name: true } },
-          },
-        });
+  try {
+    const inspection = await this.prisma.$transaction(async (prisma) => {
+      // Lấy thông tin hiện tại để biết ai liên quan
+      const current = await prisma.inspection.findUnique({
+        where: { inspection_id: id },
+        include: {
+          requester: { select: { user_id: true, full_name: true } },
+          inspector: { select: { user_id: true, full_name: true } },
+        },
+      });
+      if (!current) throw new NotFoundException();
 
-        // Xác định ai sẽ nhận thông báo
-        const notifiedUserIds: string[] = [];
-        const cancelReasonText = dto?.cancelReason ? ` Lý do: ${dto.cancelReason}` : '';
-
-        if (userRoleId === 1) {
-          // User hủy -> báo cho inspector (nếu có)
-          if (current.inspector_id) notifiedUserIds.push(current.inspector_id);
-        } else if (userRoleId === 2) {
-          // Inspector hủy -> báo cho requester
-          notifiedUserIds.push(current.requested_by_id);
-        } else if (userRoleId === 3) {
-          // Admin hủy -> báo cho cả requester và inspector (nếu có)
-          notifiedUserIds.push(current.requested_by_id);
-          if (current.inspector_id) notifiedUserIds.push(current.inspector_id);
-        }
-
-        // Tạo notifications
-        for (const targetUserId of notifiedUserIds) {
-          await prisma.notification.create({
-            data: {
-              user_id: targetUserId,
-              type: NotificationType.INSPECTION,
-              title: 'Yêu cầu kiểm định đã bị hủy',
-              message: `Yêu cầu kiểm định cho listing đã bị hủy.${cancelReasonText}`,
-              link: `/inspections/${updated.inspection_id}`,
-              created_at: new Date(), // 👈 bắt buộc vì schema không có default
-            },
-          });
-        }
-
-        return updated;
+      // Thực hiện cập nhật
+      const updated = await prisma.inspection.update({
+        where: whereCondition,
+        data: updateData,
+        include: {
+          requester: { select: { user_id: true, full_name: true } },
+          inspector: { select: { user_id: true, full_name: true } },
+        },
       });
 
-      return inspection;
-    } catch (error) {
-      if (error.code === 'P2025') {
-        throw new BadRequestException(
-          'Không thể hủy inspection. Kiểm tra trạng thái hoặc quyền.',
-        );
+      // Xác định ai sẽ nhận thông báo
+      const notifiedUserIds: string[] = [];
+      const cancelReasonText = ` Lý do: ${dto.cancelReason}`;
+
+      if (userRoleId === 1) {
+        // User hủy -> báo cho inspector (nếu có)
+        if (current.inspector_id) notifiedUserIds.push(current.inspector_id);
+      } else if (userRoleId === 2) {
+        // Inspector hủy -> báo cho requester
+        notifiedUserIds.push(current.requested_by_id);
+      } else if (userRoleId === 3) {
+        // Admin hủy -> báo cho cả requester và inspector (nếu có)
+        notifiedUserIds.push(current.requested_by_id);
+        if (current.inspector_id) notifiedUserIds.push(current.inspector_id);
       }
-      throw error;
+
+      // Tạo notifications
+      for (const targetUserId of notifiedUserIds) {
+        await prisma.notification.create({
+          data: {
+            user_id: targetUserId,
+            type: NotificationType.INSPECTION,
+            title: notificationTitle,
+            message: notificationMessage + cancelReasonText,
+            link: `/inspections/${updated.inspection_id}`,
+            created_at: new Date(),
+          },
+        });
+      }
+
+      return updated;
+    });
+
+    return inspection;
+  } catch (error) {
+    if (error.code === 'P2025') {
+      throw new BadRequestException(
+        'Không thể hủy inspection. Kiểm tra trạng thái hoặc quyền.',
+      );
     }
+    throw error;
   }
+}
 
   // ==================== ASSIGN TO SELF (inspector nhận) ====================
   async assignToSelf(id: string, userId: string) {
@@ -381,7 +399,7 @@ export class InspectionService {
             title: 'Đơn kiểm định đã được tiếp nhận',
             message: `Inspector ${updated.inspector?.full_name || 'Đã được phân công'} đã nhận yêu cầu kiểm định cho xe ${updated.listing?.vehicle?.model || ''}.`,
             link: `/inspections/${updated.inspection_id}`,
-            created_at: new Date(), // 👈 bắt buộc
+            created_at: new Date(),
           },
         });
 

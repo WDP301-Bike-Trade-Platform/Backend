@@ -7,6 +7,7 @@ import {
   IsUrl,
   IsInt,
   Min,
+  IsNotEmpty,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { InspectionRequestStatus, InspectionStatus } from '@prisma/client';
@@ -87,11 +88,11 @@ export class InspectionQueryDto {
 }
 
 export class CancelInspectionDto {
-  @IsOptional()
+  @ApiProperty({ description: 'Lý do hủy', required: true })
   @IsString()
-  cancelReason?: string;
+  @IsNotEmpty()
+  cancelReason: string;
 }
-
 // DTO riêng cho cập nhật báo cáo (có thể dùng lại Pick từ UpdateInspectionDto)
 export class UpdateReportDto {
   @ApiPropertyOptional({ enum: InspectionStatus })
