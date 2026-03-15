@@ -43,9 +43,9 @@ export class ProductsController {
     private readonly getListingService: GetListingService,
     private readonly updateListingService: UpdateListingService,
     private readonly changeListingStatusService: ChangeListingStatusService,
-      private readonly searchService: SearchService,
+    private readonly searchService: SearchService,
 
-  ) {}
+  ) { }
 
   @Roles(1)
   @Post('/create')
@@ -113,7 +113,7 @@ export class ProductsController {
     });
   }
 
-  @Roles(1, 2, 3)
+  @Public()
   @Get('/:id')
   @ApiOperation({ summary: 'Get listing detail by id' })
   async getById(@Param('id') id: string) {

@@ -11,6 +11,7 @@ import { ListingStatus, OrderStatus, Prisma } from '@prisma/client';
 
 const LISTING_RELATIONS = {
   vehicle: true,
+  media: true,
   seller: {
     select: {
       user_id: true,
@@ -93,7 +94,7 @@ const BLOCKING_ORDER_STATUSES: OrderStatus[] = [
 
 @Injectable()
 export class CartService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   /**
    * Thêm sản phẩm vào giỏ hàng
