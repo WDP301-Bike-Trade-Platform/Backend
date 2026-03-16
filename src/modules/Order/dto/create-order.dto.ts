@@ -37,4 +37,8 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiPropertyOptional({ description: 'Cờ xác định lệnh thanh toán đặt cọc 10%' })
+  @IsOptional()
+  isDeposit?: boolean;
 }

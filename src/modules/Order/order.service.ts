@@ -84,23 +84,22 @@ interface PaymentPipelineParams {
 
 @Injectable()
 export class OrderService {
-  private readonly depositThreshold = new Prisma.Decimal(
-    ESCROW_RULES.DEPOSIT_THRESHOLD_AMOUNT,
-  );
   private readonly depositRate = new Prisma.Decimal(ESCROW_RULES.DEPOSIT_RATE);
 
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => CartService))
     private cartService: CartService,
-  ) {}
+  ) { }
 
   /**
    * Tạo order mới từ listing
    */
   async createOrder(buyerId: string, dto: CreateOrderDto) {
     const paymentMethod = this.normalizePaymentMethod(dto.paymentMethod);
-
+    if (paymentMethod === 'COD' && dto.isDeposit) {
+      throw new BadRequestException('COD does not support deposit');
+    }
     const orderId = await this.prisma.$transaction(
       async (tx) => {
         const listing = await tx.listing.findUnique({
@@ -153,7 +152,7 @@ export class OrderService {
         }
 
         const totalAmount = new Prisma.Decimal(listing.vehicle.price);
-        const requiresDeposit = this.requiresDeposit(totalAmount);
+        const requiresDeposit = dto.isDeposit ?? false; // 👈 10% custom deposit decision
         const depositAmount = this.calculateDepositAmount(
           totalAmount,
           requiresDeposit,
@@ -263,7 +262,7 @@ export class OrderService {
             0,
           );
           const totalAmount = new Prisma.Decimal(totalAmountNumber);
-          const requiresDeposit = this.requiresDeposit(totalAmount);
+          const requiresDeposit = dto.isDeposit ?? false; // 👈 10% custom deposit decision
           const depositAmount = this.calculateDepositAmount(
             totalAmount,
             requiresDeposit,
@@ -416,7 +415,7 @@ export class OrderService {
   }
 
   /**
-   * Seller xác nhận đơn hàng (chỉ dành cho COD)
+   * Seller xác nhận đơn hàng 
    */
   async confirmOrder(orderId: string, sellerId: string, note?: string) {
     const order = await this.fetchOrderWithRelations(orderId);
@@ -429,15 +428,8 @@ export class OrderService {
       throw new ForbiddenException('You are not the seller of this order');
     }
 
-    const paymentMethod = this.resolvePrimaryPaymentMethod(order.payments);
-    if (paymentMethod !== 'COD') {
-      throw new BadRequestException(
-        'Only COD orders require manual confirmation',
-      );
-    }
-
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('Only pending COD orders can be confirmed');
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DEPOSITED) {
+      throw new BadRequestException('Only pending or deposited orders can be confirmed by the seller');
     }
 
     const updatedOrder = await this.prisma.order.update({
@@ -454,7 +446,7 @@ export class OrderService {
         user_id: order.buyer_id,
         type: 'ORDER',
         title: 'Order Confirmed',
-        message: `Your order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been confirmed${note ? ': ' + note : ''}`,
+        message: `Your order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been confirmed by the seller${note ? ': ' + note : ''}`,
         created_at: new Date(),
       },
     });
@@ -462,6 +454,78 @@ export class OrderService {
     return {
       success: true,
       data: this.withMeta(updatedOrder),
+    };
+  }
+
+  /**
+   * Seller từ chối đơn hàng (Phase 2)
+   */
+  async rejectOrder(orderId: string, sellerId: string, reason: string) {
+    const order = await this.fetchOrderWithRelations(orderId);
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.listing.seller_id !== sellerId) {
+      throw new ForbiddenException('You are not the seller of this order');
+    }
+
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.DEPOSITED) {
+      throw new BadRequestException('Only pending or deposited orders can be rejected by the seller');
+    }
+
+    const depositPaid = this.isDepositPaid(order);
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { order_id: orderId },
+      data: {
+        status: OrderStatus.CANCELLED_BY_SELLER,
+      },
+      include: ORDER_RELATIONS,
+    });
+
+    // Chuyển tất cả listings của order về ACTIVE
+    const listingIds = order.orderDetails.map((d) => d.listing_id);
+    if (!listingIds.includes(order.listing_id)) {
+      listingIds.push(order.listing_id);
+    }
+    await this.prisma.listing.updateMany({
+      where: { listing_id: { in: listingIds } },
+      data: { status: 'ACTIVE' },
+    });
+
+    if (depositPaid) {
+      await this.prisma.paymentDeposit.updateMany({
+        where: { order_id: orderId },
+        data: {
+          status: 'REFUNDED',
+          note: reason ? `Seller rejected: ${reason}` : undefined,
+        },
+      });
+
+      await this.prisma.payment.updateMany({
+        where: { order_id: orderId },
+        data: { status: PaymentStatus.FAILED },
+      });
+
+      // TODO: Logic refund deposit cho buyer
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        user_id: order.buyer_id,
+        type: 'ORDER',
+        title: 'Order Cancelled by Seller',
+        message: `The order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been cancelled by the seller. Reason: ${reason}`,
+        created_at: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      data: this.withMeta(updatedOrder),
+      message: 'Order rejected successfully',
     };
   }
 
@@ -575,7 +639,6 @@ export class OrderService {
 
         let nextStatus = status;
         if (status === OrderStatus.DEPOSITED) {
-          nextStatus = OrderStatus.CONFIRMED;
 
           await tx.payment.updateMany({
             where: {
@@ -612,7 +675,7 @@ export class OrderService {
         if (status === OrderStatus.DEPOSITED) {
           await tx.listing.update({
             where: { listing_id: order.listing_id },
-            data: { status: 'SOLD' },
+            data: { status: 'RESERVED' }, // 👈 Locks item temporarily
           });
         }
 
@@ -702,9 +765,6 @@ export class OrderService {
     return normalized;
   }
 
-  private requiresDeposit(amount: Prisma.Decimal) {
-    return amount.greaterThanOrEqualTo(this.depositThreshold);
-  }
 
   private calculateDepositAmount(
     totalAmount: Prisma.Decimal,
@@ -810,16 +870,15 @@ export class OrderService {
 
   private buildOrderMeta(order: OrderWithRelations): OrderMeta {
     const totalAmount = this.sumOrderDetails(order.orderDetails);
-    const depositRequired = this.requiresDeposit(totalAmount);
-    const depositAmount = depositRequired ? order.deposit_amount : totalAmount;
+    const depositAmount = Number(order.deposit_amount);
     const depositPaid = this.isDepositPaid(order);
     const paymentMethod = this.resolvePrimaryPaymentMethod(order.payments);
 
     return {
       paymentMethod,
       totalAmount: this.toNumber(totalAmount),
-      depositAmount: this.toNumber(depositAmount),
-      depositRequired,
+      depositAmount: depositAmount,
+      depositRequired: depositAmount > 0,
       depositPaid,
     };
   }
@@ -835,18 +894,14 @@ export class OrderService {
   }
 
   private isDepositPaid(order: OrderWithRelations) {
-    const depositPaid = order.paymentDeposits.some((deposit) => {
-      const status = (deposit.status ?? '').toUpperCase();
-      return status === 'SUCCESS' || status === 'PAID';
-    });
+    if (order.payments.length === 0) return false;
+    const payment = order.payments[0];
 
-    if (depositPaid) {
-      return true;
-    }
-
-    return order.payments.some(
-      (payment) => payment.status === PaymentStatus.SUCCESS,
+    const hasCompletedDeposit = order.paymentDeposits?.some(
+      (d) => d.status === 'SUCCESS',
     );
+
+    return payment.status === PaymentStatus.SUCCESS && hasCompletedDeposit;
   }
 
   private resolvePrimaryPaymentMethod(

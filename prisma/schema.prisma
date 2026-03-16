@@ -505,6 +505,7 @@ enum ListingStatus {
   APPROVED
   PENDING_APPROVAL
   REJECTED
+  RESERVED
 }
 
 enum OrderStatus {
@@ -513,6 +514,9 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
   CONFIRMED
+  FORFEITED
+  CANCELLED_BY_SELLER
+  PAID
 }
 
 enum PaymentStatus {

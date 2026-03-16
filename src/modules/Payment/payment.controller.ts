@@ -23,6 +23,8 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { JwtUser } from 'src/common/types/types';
 import { ConfigService } from '@nestjs/config';
+import { RolesGuard } from 'src/common/decorators/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
 @ApiTags('Payment')
 @ApiBearerAuth('access-token')
@@ -38,30 +40,23 @@ export class PaymentController {
     this.DEEP_LINK_SCHEME = this.configService.get<string>('DEEP_LINK_SCHEME') || 'biketrade://';
   }
 
-  @Post('create-for-listing')
-  @ApiOperation({ summary: 'Create payment link for listing' })
-  async createPaymentForListing(
-    @Body() createPaymentLinkDto: CreatePaymentLinkDto,
-    @Req() req: Request & { user: JwtUser },
-  ) {
-    const buyerId = req.user.user_id;
-    return this.paymentService.createPaymentLinkForListing(
-      createPaymentLinkDto.listingId,
-      buyerId,
-    );
-  }
-
   @Post('create-for-order')
-  @ApiOperation({ summary: 'Create payment link for order (multiple items)' })
-  @ApiResponse({ status: 201, description: 'Payment link created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid data' })
-  @ApiResponse({ status: 404, description: 'Order not found' })
+  @Roles(1) // USER
+  @ApiOperation({ summary: 'Tạo link thanh toán PayOS cho Order' })
+  @ApiResponse({
+    status: 201,
+    description: 'Link thanh toán được tạo thành công',
+  })
   async createPaymentForOrder(
     @Body() dto: CreatePaymentLinkForOrderDto,
     @Req() req: Request & { user: JwtUser },
   ) {
-    const buyerId = req.user.user_id;
-    return this.paymentService.createPaymentLinkForOrder(dto.orderId, buyerId);
+    return this.paymentService.createPaymentLinkForOrder(
+      dto.orderId,
+      req.user.user_id,
+      dto.paymentStage,
+      dto.platform,
+    );
   }
 
   @Get('info/:orderCode')

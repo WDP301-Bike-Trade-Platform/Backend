@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsUUID,
+  IsOptional,
+  IsEnum,
 } from 'class-validator';
 
 export class CreatePaymentLinkDto {
@@ -10,4 +12,13 @@ export class CreatePaymentLinkDto {
   })
   @IsUUID()
   listingId: string;
+
+  @ApiPropertyOptional({ description: 'Thanh toán cọc 10% hay toàn bộ' })
+  @IsOptional()
+  isDeposit?: boolean;
+
+  @ApiPropertyOptional({ description: 'Nền tảng thanh toán', enum: ['WEB', 'MOBILE'] })
+  @IsOptional()
+  @IsEnum(['WEB', 'MOBILE'])
+  platform?: 'WEB' | 'MOBILE';
 }

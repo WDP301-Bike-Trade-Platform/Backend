@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Inject, forwardRef } from '@nestjs/common';
 import { PayOS } from '@payos/node';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/database/prisma.service';
@@ -29,82 +29,9 @@ export class PaymentService {
   }
 
   /**
-   * Tạo payment link cho listing (tự động tạo order trước)
+   * Tạo payment link cho order (Hỗ trợ DEPOSIT hoặc REMAINING)
    */
-  async createPaymentLinkForListing(
-    listingId: string,
-    buyerId: string,
-  ) {
-    try {
-      const orderPayload = {
-        listingId,
-        paymentMethod: 'PAYOS',
-      } as CreateOrderDto;
-
-      const orderResult = await this.orderService.createOrder(
-        buyerId,
-        orderPayload,
-      );
-
-      const order = orderResult.data;
-      if (!order) {
-        throw new BadRequestException('Cannot create order for listing');
-      }
-
-      const orderCode = Number(Date.now().toString().slice(-9));
-      const amountToCharge = order.meta?.depositAmount ?? Number(order.deposit_amount);
-      const vehicle = order.listing?.vehicle;
-      const orderId = order.order_id;
-
-      const paymentLinkData = {
-        orderCode,
-        amount: amountToCharge,
-        description: `${orderId.substring(0, 8)}`,
-        returnUrl: `${this.BACKEND_URL}/payment/redirect/success?orderId=${orderId}&orderCode=${orderCode}`,
-        cancelUrl: `${this.BACKEND_URL}/payment/redirect/cancel?orderId=${orderId}`,
-        items: order.orderDetails.map((detail) => ({
-          name: `${detail.vehicle.brand} ${detail.vehicle.model} (${detail.vehicle.year})`,
-          quantity: detail.quantity,
-          price: Number(detail.unit_price),
-        })),
-      };
-
-      const paymentLink = await this.payos.paymentRequests.create(
-        paymentLinkData,
-      );
-
-      return {
-        success: true,
-        data: {
-          orderId,
-          orderCode,
-          paymentLinkId: paymentLink.paymentLinkId,
-          paymentLink: paymentLink.checkoutUrl,
-          qrCode: paymentLink.qrCode,
-          amount: amountToCharge,
-          listingId: order.listing?.listing_id,
-          vehicle: vehicle
-            ? {
-                brand: vehicle.brand,
-                model: vehicle.model,
-                year: vehicle.year,
-                price: vehicle.price,
-              }
-            : null,
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
-   * Tạo payment link cho order (hỗ trợ nhiều items)
-   */
-  async createPaymentLinkForOrder(orderId: string, buyerId: string) {
+  async createPaymentLinkForOrder(orderId: string, buyerId: string, paymentStage: 'DEPOSIT' | 'REMAINING' = 'DEPOSIT', platform: 'WEB' | 'MOBILE' = 'MOBILE') {
     try {
       // Lấy thông tin order với các order details
       const order = await this.prisma.order.findUnique({
@@ -133,15 +60,45 @@ export class PaymentService {
         throw new BadRequestException('This order does not belong to you');
       }
 
-      // Kiểm tra trạng thái order
-      if (order.status !== 'PENDING') {
-        throw new BadRequestException(
-          'Payment link can only be created for pending orders',
-        );
-      }
-
       // Generate unique order code từ timestamp
       const orderCode = Number(Date.now().toString().slice(-9));
+
+      const isDeposit = paymentStage === 'DEPOSIT';
+      let amountToCharge = 0;
+
+      if (isDeposit) {
+        if (order.status !== 'PENDING') {
+          throw new BadRequestException('Payment link for DEPOSIT can only be created for PENDING orders');
+        }
+        amountToCharge = Number(order.deposit_amount);
+      } else {
+        // Stage = REMAINING
+        if (order.status !== 'CONFIRMED') {
+          throw new BadRequestException('Remaining payment can only be made for CONFIRMED orders');
+        }
+
+        if (!order.confirmed_at) {
+          throw new BadRequestException('Order confirmation time is missing');
+        }
+
+        const now = new Date().getTime();
+        const confTime = order.confirmed_at.getTime();
+        const diffMinutes = (now - confTime) / (1000 * 60);
+
+        if (diffMinutes > 3) {
+          throw new BadRequestException('The 3-minute window for the remaining payment has expired.');
+        }
+
+        const totalPrice = order.orderDetails.reduce((acc, curr) => acc + Number(curr.total_price), 0);
+        amountToCharge = totalPrice - Number(order.deposit_amount);
+
+        if (amountToCharge <= 0) {
+          throw new BadRequestException('Remaining amount is 0 or negative. No further payment required.');
+        }
+      }
+
+      const stagePrefix = isDeposit ? 'DEP' : 'REM';
+
 
       // Chuẩn bị items cho PayOS
       const items = order.orderDetails.map((detail) => ({
@@ -150,18 +107,21 @@ export class PaymentService {
         price: Number(detail.unit_price),
       }));
 
-      // Tính tổng tiền
-      const totalAmount = Number(order.deposit_amount);
+      await this.ensurePendingPaymentRecord(order.order_id, new Prisma.Decimal(amountToCharge), isDeposit ? 'DEPOSIT' : 'REMAINING');
 
-      await this.ensurePendingPaymentRecord(order.order_id, order.deposit_amount);
+      // description cannot exceed 25 characters on PayOS, we put Stage Prefix at the start
+      const shortOrderId = order.order_id.replace(/-/g, '').substring(0, 8);
+
+      const returnUrl = this.buildRedirectUrl(platform, 'success', { orderId, orderCode: orderCode.toString() });
+      const cancelUrl = this.buildRedirectUrl(platform, 'cancel', { orderId });
 
       // Tạo payment link với PayOS
       const paymentLinkData = {
         orderCode: orderCode,
-        amount: totalAmount,
-        description: `${order.order_id.substring(0, 8)}`,
-        returnUrl: `${this.BACKEND_URL}/payment/redirect/success?orderId=${orderId}&orderCode=${orderCode}`,
-        cancelUrl: `${this.BACKEND_URL}/payment/redirect/cancel?orderId=${orderId}`,
+        amount: amountToCharge,
+        description: `${stagePrefix}${shortOrderId}`,
+        returnUrl,
+        cancelUrl,
         items: items,
       };
 
@@ -177,7 +137,7 @@ export class PaymentService {
           paymentLinkId: paymentLink.paymentLinkId,
           paymentLink: paymentLink.checkoutUrl,
           qrCode: paymentLink.qrCode,
-          amount: totalAmount,
+          amount: amountToCharge,
           itemCount: order.orderDetails.length,
           items: order.orderDetails.map((detail) => ({
             vehicleBrand: detail.vehicle.brand,
@@ -198,6 +158,7 @@ export class PaymentService {
   private async ensurePendingPaymentRecord(
     orderId: string,
     amount: Prisma.Decimal,
+    stage: 'DEPOSIT' | 'REMAINING'
   ) {
     const pendingPayment = await this.prisma.payment.findFirst({
       where: {
@@ -208,15 +169,32 @@ export class PaymentService {
     });
 
     if (!pendingPayment) {
-      await this.prisma.payment.create({
+      const paymentInfo = await this.prisma.payment.create({
         data: {
           order_id: orderId,
           method: 'PAYOS',
-          amount,
+          amount: amount,
           status: PaymentStatus.PENDING,
           created_at: new Date(),
         },
       });
+
+      // Track deposit record if this is the deposit stage
+      if (stage === 'DEPOSIT') {
+        const order = await this.prisma.order.findUnique({ where: { order_id: orderId } });
+        if (order) {
+          await this.prisma.paymentDeposit.create({
+            data: {
+              order_id: orderId,
+              payment_id: paymentInfo.payment_id,
+              buyer_id: order.buyer_id,
+              amount: amount,
+              status: 'PENDING',
+              created_at: new Date(),
+            }
+          });
+        }
+      }
       return;
     }
 
@@ -274,7 +252,7 @@ export class PaymentService {
     try {
       // Xác thực webhook signature
       const verifiedData = await this.payos.webhooks.verify(webhookData);
-     
+
       // Cho phép PayOS dashboard test webhook
       if (
         ["Ma giao dich thu nghiem", "VQRIO123"].includes(verifiedData.description)
@@ -295,16 +273,26 @@ export class PaymentService {
         };
       }
 
-      // Parse orderId từ description (format: "abc12345")
-      const orderIdPrefix = verifiedData.description;
-      
+      // Description is format "DEP<shortOrderId>" or "REM<shortOrderId>"
+      const rawDesc: string = verifiedData.description;
+      const isDeposit = rawDesc.startsWith('DEP');
+      const isRemaining = rawDesc.startsWith('REM');
+
+      // The order_id startsWith the 8 char footprint.
+      // E.g: "DEPabc12345" -> prefix searches "abc12345"
+      const shortIdLength = 8;
+      const orderIdIndex = isDeposit || isRemaining ? 3 : 0;
+      const orderIdPrefix = rawDesc.substring(orderIdIndex, orderIdIndex + shortIdLength);
+
       // Tìm order dựa vào orderId prefix từ description
       const order = await this.prisma.order.findFirst({
         where: {
           order_id: {
             startsWith: orderIdPrefix,
           },
-          status: 'PENDING',
+          status: {
+            in: ['PENDING', 'CONFIRMED'] // Could be PENDING (for DEPOSIT) or CONFIRMED (for REMAINING)
+          }
         },
         include: {
           buyer: {
@@ -336,15 +324,69 @@ export class PaymentService {
         };
       }
 
-      const updateResult = await this.orderService.updateOrderStatus(
-        order.order_id,
-        OrderStatus.DEPOSITED,
-        {
-          paymentMethod: 'PAYOS',
-          paidAmount: verifiedData.amount,
-          paymentCode: verifiedData.orderCode,
-        },
-      );
+      let nextStatus = order.status;
+
+      if (isDeposit || (!isDeposit && !isRemaining)) {
+        // Legacy or explicit DEP prefix -> deposit phase
+        if (order.status === 'PENDING') {
+          const updateResult = await this.orderService.updateOrderStatus(
+            order.order_id,
+            OrderStatus.DEPOSITED,
+            {
+              paymentMethod: 'PAYOS',
+              paidAmount: verifiedData.amount,
+              paymentCode: verifiedData.orderCode,
+            },
+          );
+          nextStatus = updateResult.data?.status ?? OrderStatus.DEPOSITED;
+        }
+      } else if (isRemaining) {
+        // REMAINING payment successful
+        if (order.status === 'CONFIRMED') {
+          await this.prisma.payment.updateMany({
+            where: {
+              order_id: order.order_id,
+              status: PaymentStatus.PENDING,
+            },
+            data: {
+              status: PaymentStatus.SUCCESS,
+              method: 'PAYOS',
+            }
+          });
+
+          // Cập nhật trạng thái Order thành PAID thông qua OrderService
+          const updateResult = await this.orderService.updateOrderStatus(
+            order.order_id,
+            OrderStatus.PAID,
+            {
+              paymentMethod: 'PAYOS',
+              paidAmount: verifiedData.amount,
+              paymentCode: verifiedData.orderCode,
+            },
+          );
+
+          // Notify the seller that the rest was paid.
+          await this.prisma.notification.createMany({
+            data: [
+              {
+                user_id: order.listing.seller.user_id,
+                type: 'ORDER',
+                title: 'Remaining Amount Paid',
+                message: `The buyer has successfully paid the remaining amount for ${order.listing.vehicle.brand} ${order.listing.vehicle.model}.`,
+                created_at: new Date(),
+              },
+              {
+                user_id: order.buyer.user_id,
+                type: 'ORDER',
+                title: 'Payment Successful',
+                message: `You successfully paid the remaining balance for ${order.listing.vehicle.brand} ${order.listing.vehicle.model}. Please arrange pickup/delivery and confirm completion.`,
+                created_at: new Date(),
+              }
+            ]
+          });
+          nextStatus = updateResult.data?.status ?? OrderStatus.PAID;
+        }
+      }
 
       return {
         success: true,
@@ -353,7 +395,7 @@ export class PaymentService {
           orderId: order.order_id,
           orderCode: verifiedData.orderCode,
           amount: verifiedData.amount,
-          status: updateResult.data?.status ?? OrderStatus.CONFIRMED,
+          status: nextStatus,
         },
       };
     } catch (error) {
@@ -367,5 +409,48 @@ export class PaymentService {
     }
   }
 
+
+  private buildRedirectUrl(platform: 'WEB' | 'MOBILE', type: 'success' | 'cancel', queryParams: Record<string, string>): string {
+    let baseUrl: string | undefined;
+
+    if (platform === 'WEB') {
+      baseUrl = this.configService.get<string>('WEB_URL_BASE');
+      if (!baseUrl) {
+        throw new InternalServerErrorException('WEB_URL_BASE is not configured');
+      }
+    } else {
+      baseUrl = this.configService.get<string>('DEEP_LINK_SCHEME');
+      if (!baseUrl) {
+        throw new InternalServerErrorException('DEEP_LINK_SCHEME is not configured');
+      }
+    }
+
+    // Ensure safe URL construction (handling trailing slashes)
+    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    let path = type === 'success' ? '/payment-success' : '/payment-cancel';
+
+    // For web, the structure might be different based on frontend routes
+    if (platform === 'WEB') {
+      path = type === 'success' ? '/payment/success' : '/payment/cancel';
+    } else {
+      // Mobile deep link
+      path = type === 'success' ? 'payment/success' : 'payment/cancel';
+      // Add slash if mobile base doesn't end with one and path doesn't start with one (not typically needed for deep links if base is myapp:// but handled safely)
+      if (!baseUrl.endsWith('/') && !baseUrl.includes('://')) {
+        path = '/' + path;
+      } else if (baseUrl.includes('://') && !baseUrl.endsWith('/') && !path.startsWith('/')) {
+        // myapp:// + payment/success is fine, myapp:// + /payment/success -> myapp:///payment/success
+      }
+    }
+
+    const url = new URL(platform === 'WEB' ? `${normalizedBaseUrl}${path}` : `${normalizedBaseUrl}${normalizedBaseUrl.endsWith('/') ? '' : '/'}${path}`);
+
+    // Append query parameters dynamically
+    Object.entries(queryParams).forEach(([key, value]) => {
+      url.searchParams.append(key, value);
+    });
+
+    return url.toString();
+  }
 
 }

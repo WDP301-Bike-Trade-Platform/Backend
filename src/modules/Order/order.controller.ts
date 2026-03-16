@@ -118,6 +118,24 @@ export class OrderController {
     );
   }
 
+  @Patch(':id/seller-reject')
+  @Roles(1) // SELLER
+  @ApiOperation({ summary: 'Seller từ chối đơn hàng' })
+  @ApiResponse({ status: 200, description: 'Từ chối thành công' })
+  @ApiResponse({ status: 400, description: 'Không thể từ chối order này' })
+  @ApiResponse({ status: 403, description: 'Không phải seller' })
+  async rejectOrder(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtUser },
+    @Body() cancelOrderDto: CancelOrderDto,
+  ) {
+    return this.orderService.rejectOrder(
+      id,
+      req.user.user_id,
+      cancelOrderDto.reason,
+    );
+  }
+
   @Patch(':id/cancel')
   @Roles(1) // BUYER
   @ApiOperation({ summary: 'Buyer hủy đơn hàng' })
