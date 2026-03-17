@@ -15,6 +15,7 @@ model Role {
 
   @@map("roles")
 }
+
 enum VehicleCondition {
   NEW
   USED
@@ -52,8 +53,8 @@ model User {
   reviewsReceived      Review[]         @relation("Target")
   profile              UserProfile?
   wishlist             Wishlist?
-  reports              Report[]         @relation("UserReports")      // 👈 báo cáo do user này tạo
-  reportsProcessed     Report[]         @relation("AdminProcessed")   // 👈 báo cáo do user này (admin) xử lý
+  reports              Report[]         @relation("UserReports") // 👈 báo cáo do user này tạo
+  reportsProcessed     Report[]         @relation("AdminProcessed") // 👈 báo cáo do user này (admin) xử lý
   role                 Role             @relation(fields: [role_id], references: [role_id])
 
   @@map("users")
@@ -86,10 +87,10 @@ model UserProfile {
 }
 
 model Category {
-  category_id String    @id @default(uuid())
+  category_id String     @id @default(uuid())
   name        String
-  parent_id   String?   // ID danh mục cha (null nếu là danh mục gốc)
-  parent      Category? @relation("CategoryHierarchy", fields: [parent_id], references: [category_id])
+  parent_id   String? // ID danh mục cha (null nếu là danh mục gốc)
+  parent      Category?  @relation("CategoryHierarchy", fields: [parent_id], references: [category_id])
   children    Category[] @relation("CategoryHierarchy")
   vehicles    Vehicle[]
 
@@ -97,42 +98,41 @@ model Category {
 }
 
 model Vehicle {
-  vehicle_id    String   @id @default(uuid())
-  category_id   String
+  vehicle_id  String @id @default(uuid())
+  category_id String
 
-  brand         String
-  model         String
-  year          Int
-  price         Decimal
+  brand String
+  model String
+  year  Int
+  price Decimal
 
-  bike_type     String          // road, mtb, fixed, gravel...
-  material      String          // carbon, aluminum...
-  brake_type    String          // disc, rim
-  wheel_size    String?         // 700c, 29, 27.5
+  bike_type  String // road, mtb, fixed, gravel...
+  material   String // carbon, aluminum...
+  brake_type String // disc, rim
+  wheel_size String? // 700c, 29, 27.5
 
-  condition     VehicleCondition
-  usage_level   String?         // NEW, LIGHT, HEAVY
-  mileage_km    Int?            // optional
+  condition   VehicleCondition
+  usage_level String? // NEW, LIGHT, HEAVY
+  mileage_km  Int? // optional
 
-  groupset      String?         // Shimano 105, SRAM Rival...
-  frame_size    String?
+  groupset   String? // Shimano 105, SRAM Rival...
+  frame_size String?
 
-  is_original   Boolean @default(true)
-  has_receipt   Boolean @default(false)
-  frame_serial  String?
+  is_original  Boolean @default(true)
+  has_receipt  Boolean @default(false)
+  frame_serial String?
 
   last_service_at DateTime?
-  description   String?
+  description     String?
 
-  created_at    DateTime @default(now())
+  created_at DateTime @default(now())
 
-  category     Category @relation(fields: [category_id], references: [category_id])
+  category     Category      @relation(fields: [category_id], references: [category_id])
   listings     Listing[]
   orderDetails OrderDetail[]
 
   @@map("vehicles")
 }
-
 
 model Listing {
   listing_id    String         @id @default(uuid())
@@ -170,38 +170,39 @@ model ListingMedia {
   is_cover    Boolean   @default(false)
   uploaded_at DateTime
 
-  listing     Listing   @relation(fields: [listing_id], references: [listing_id])
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
 
   @@map("listing_media")
 }
 
 enum InspectionRequestStatus {
-  PENDING   // chờ xác nhận lịch
+  PENDING // chờ xác nhận lịch
   CONFIRMED // đã xác nhận lịch
   COMPLETED // đã hoàn thành (có kết quả)
   CANCELLED // đã hủy
 }
 
 model Inspection {
-  inspection_id     String                   @id @default(uuid())
-  listing_id        String
-  requested_by_id   String                    // người mua yêu cầu
-  inspector_id      String?                   // người thực hiện (có thể null khi mới tạo)
-  scheduled_at      DateTime?                  // thời gian hẹn kiểm định
-  request_status    InspectionRequestStatus   @default(PENDING)
-  result_status     InspectionStatus?          // PASSED/FAILED/EXPIRED (kết quả)
-  report_url        String?
-  notes             String?
-  created_at        DateTime                  @default(now())
-  updated_at        DateTime                  @updatedAt
-  valid_until       DateTime?                  // hiệu lực của kết quả (nếu có)
+  inspection_id   String                  @id @default(uuid())
+  listing_id      String
+  requested_by_id String // người mua yêu cầu
+  inspector_id    String? // người thực hiện (có thể null khi mới tạo)
+  scheduled_at    DateTime? // thời gian hẹn kiểm định
+  request_status  InspectionRequestStatus @default(PENDING)
+  result_status   InspectionStatus? // PASSED/FAILED/EXPIRED (kết quả)
+  report_url      String?
+  notes           String?
+  created_at      DateTime                @default(now())
+  updated_at      DateTime                @updatedAt
+  valid_until     DateTime? // hiệu lực của kết quả (nếu có)
 
-  listing           Listing                   @relation(fields: [listing_id], references: [listing_id])
-  requester         User                      @relation("InspectionRequester", fields: [requested_by_id], references: [user_id])
-  inspector         User?                     @relation("Inspector", fields: [inspector_id], references: [user_id])
+  listing   Listing @relation(fields: [listing_id], references: [listing_id])
+  requester User    @relation("InspectionRequester", fields: [requested_by_id], references: [user_id])
+  inspector User?   @relation("Inspector", fields: [inspector_id], references: [user_id])
 
   @@map("inspections")
 }
+
 model Order {
   order_id        String           @id @default(uuid())
   buyer_id        String
@@ -217,12 +218,13 @@ model Order {
   paymentDeposits PaymentDeposit[]
   payments        Payment[]
   reviews         Review[]
+  shipment        Shipment?
 
   @@map("orders")
 }
 
 model OrderDetail {
-  order_detail_id String   @id @default(uuid())
+  order_detail_id String         @id @default(uuid())
   order_id        String
   listing_id      String
   vehicle_id      String
@@ -230,9 +232,10 @@ model OrderDetail {
   unit_price      Decimal
   total_price     Decimal
   created_at      DateTime
-  listing         Listing  @relation(fields: [listing_id], references: [listing_id])
-  order           Order    @relation(fields: [order_id], references: [order_id])
-  vehicle         Vehicle  @relation(fields: [vehicle_id], references: [vehicle_id])
+  listing         Listing        @relation(fields: [listing_id], references: [listing_id])
+  order           Order          @relation(fields: [order_id], references: [order_id])
+  vehicle         Vehicle        @relation(fields: [vehicle_id], references: [vehicle_id])
+  shipment_items  ShipmentItem[]
 
   @@map("order_details")
 }
@@ -281,26 +284,26 @@ model PaymentDeposit {
 }
 
 model Transfer {
-  transfer_id   String   @id @default(uuid())
-  reference_id  String   @unique
-  payout_id     String?
-  user_id       String?
-  total_credit  Decimal?
-  category      Json?
-  approval_state String  @default("DRAFTING")
-  created_at    DateTime @default(now())
-  updated_at    DateTime? @updatedAt
+  transfer_id    String    @id @default(uuid())
+  reference_id   String    @unique
+  payout_id      String?
+  user_id        String?
+  total_credit   Decimal?
+  category       Json?
+  approval_state String    @default("DRAFTING")
+  created_at     DateTime  @default(now())
+  updated_at     DateTime? @updatedAt
 
-  user         User?                  @relation(fields: [user_id], references: [user_id])
+  user         User?                 @relation(fields: [user_id], references: [user_id])
   transactions TransferTransaction[]
 
   @@map("transfers")
 }
 
 model TransferTransaction {
-  transfer_transaction_id String   @id @default(uuid())
+  transfer_transaction_id String    @id @default(uuid())
   transfer_id             String
-  reference_id            String   @unique
+  reference_id            String    @unique
   payout_transaction_id   String?
   amount                  Decimal
   description             String
@@ -312,7 +315,7 @@ model TransferTransaction {
   error_message           String?
   error_code              String?
   state                   String
-  created_at              DateTime @default(now())
+  created_at              DateTime  @default(now())
 
   transfer Transfer @relation(fields: [transfer_id], references: [transfer_id], onDelete: Cascade)
 
@@ -373,6 +376,7 @@ model Review {
 
   @@map("reviews")
 }
+
 enum ReportStatus {
   PENDING
   PROCESSING
@@ -391,22 +395,22 @@ enum ReportResolution {
 }
 
 model Report {
-  report_id     String           @id @default(uuid())
-  user_id       String
-  listing_id    String
-  reason        String
-  description   String?
-  status        ReportStatus     @default(PENDING)
-  resolution    ReportResolution?
-  processed_by  String?
-  processed_at  DateTime?
-  admin_notes   String?
-  created_at    DateTime         @default(now())
-  updated_at    DateTime         @updatedAt
+  report_id    String            @id @default(uuid())
+  user_id      String
+  listing_id   String
+  reason       String
+  description  String?
+  status       ReportStatus      @default(PENDING)
+  resolution   ReportResolution?
+  processed_by String?
+  processed_at DateTime?
+  admin_notes  String?
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
 
-  listing       Listing          @relation(fields: [listing_id], references: [listing_id])
-  user          User             @relation("UserReports", fields: [user_id], references: [user_id])   // 👈 thêm "UserReports"
-  admin         User?            @relation("AdminProcessed", fields: [processed_by], references: [user_id])
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
+  user    User    @relation("UserReports", fields: [user_id], references: [user_id]) // 👈 thêm "UserReports"
+  admin   User?   @relation("AdminProcessed", fields: [processed_by], references: [user_id])
 
   @@map("reports")
 }
@@ -469,12 +473,13 @@ model CartItem {
   @@unique([cart_id, listing_id])
   @@map("cart_items")
 }
+
 model Wishlist {
-  wishlist_id String   @id @default(uuid())
-  user_id     String   @unique
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  user        User     @relation(fields: [user_id], references: [user_id])
+  wishlist_id String         @id @default(uuid())
+  user_id     String         @unique
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+  user        User           @relation(fields: [user_id], references: [user_id])
   items       WishlistItem[]
 
   @@map("wishlists")
@@ -491,6 +496,101 @@ model WishlistItem {
   @@unique([wishlist_id, listing_id])
   @@map("wishlist_items")
 }
+
+enum ShipmentStatus {
+  PENDING // Chờ lấy hàng (mới tạo, carrier chưa lấy)
+  PICKED_UP // Đã lấy hàng
+  IN_TRANSIT // Đang vận chuyển
+  OUT_FOR_DELIVERY // Đang giao
+  DELIVERED // Đã giao thành công
+  FAILED // Giao thất bại
+  RETURNED // Trả lại người gửi
+  CANCELLED // Đã hủy
+}
+
+model ShippingMethod {
+  shipping_method_id String   @id @default(uuid())
+  name               String // "Giao hàng nhanh", "Giao hàng tiết kiệm", ...
+  code               String   @unique // Mã tích hợp với carrier, vd: "GHN_FAST"
+  carrier            String // Tên hãng vận chuyển: "GHN", "GHTK", "VNPost"
+  description        String?
+  base_fee           Decimal // Phí cơ bản (có thể được tính lại từ carrier)
+  estimated_days     Int? // Thời gian dự kiến (ngày)
+  is_active          Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  shipments Shipment[]
+}
+
+model Shipment {
+  shipment_id        String  @id @default(uuid())
+  order_id           String  @unique // Một order chỉ có một shipment chính
+  shipping_method_id String? // Phương thức được chọn
+
+  // Thông tin từ carrier
+  tracking_number    String? // Mã vận đơn
+  carrier            String? // Hãng vận chuyển (lưu lại nếu không dùng method)
+  status             ShipmentStatus @default(PENDING)
+  shipping_fee       Decimal // Phí vận chuyển thực tế
+  estimated_delivery DateTime? // Ngày giao dự kiến (từ carrier)
+  delivered_at       DateTime? // Ngày giao thực tế
+  shipped_at         DateTime? // Ngày gửi hàng
+  cancelled_at       DateTime?
+
+  // Thời gian shop xác nhận đã chuẩn bị hàng (nếu cần)
+  shop_confirmed_at DateTime?
+
+  // Dữ liệu phản hồi từ carrier (để debug/đối soát)
+  carrier_request  Json? // Request gửi đi
+  carrier_response Json? // Response nhận về (khi tạo đơn)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Liên kết
+  order           Order              @relation(fields: [order_id], references: [order_id])
+  shipping_method ShippingMethod?    @relation(fields: [shipping_method_id], references: [shipping_method_id])
+  items           ShipmentItem[]
+  trackings       ShipmentTracking[]
+}
+
+model ShipmentItem {
+  shipment_item_id String @id @default(uuid())
+  shipment_id      String
+  order_detail_id  String // Sản phẩm từ OrderDetail
+  quantity         Int // Số lượng sản phẩm trong shipment này
+
+  shipment     Shipment    @relation(fields: [shipment_id], references: [shipment_id])
+  order_detail OrderDetail @relation(fields: [order_detail_id], references: [order_detail_id])
+
+  @@unique([shipment_id, order_detail_id])
+}
+
+model ShipmentTracking {
+  tracking_id String   @id @default(uuid())
+  shipment_id String
+  status      String // Trạng thái mô tả từ carrier (ví dụ: "Đã nhận đơn", "Đang giao",...)
+  location    String? // Địa điểm cập nhật
+  description String? // Mô tả chi tiết
+  tracked_at  DateTime // Thời gian xảy ra cập nhật (từ carrier)
+  created_at  DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipment_id], references: [shipment_id])
+}
+
+// Bảng log webhook từ carrier (để kiểm tra, debug)
+model CarrierWebhookLog {
+  id           String    @id @default(uuid())
+  carrier      String // "GHN", "GHTK", ...
+  event_type   String // "shipping.update", "order.status", ...
+  payload      Json // Toàn bộ dữ liệu webhook gửi sang
+  processed    Boolean   @default(false)
+  error        String?
+  created_at   DateTime  @default(now())
+  processed_at DateTime?
+}
+
 enum RoleName {
   USER
   INSPECTOR

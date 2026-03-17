@@ -15,6 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { WishlistModule } from './modules/Wishlist/wishlist.module';
 import { InspectionModule } from './modules/Inspections/inspection.module';
 import { ReportModule } from './modules/Report/report.module';
+import { ShippingModule } from './modules/Shipping/shipping.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { ReportModule } from './modules/Report/report.module';
     ChatModule,
     WishlistModule,
     InspectionModule,
-    ReportModule
+    ReportModule,
+    ShippingModule,
   ],
 })
 export class AppModule {}
