@@ -8,12 +8,14 @@ import { AuthModule } from '../Auth/auth.module';
 import { CartModule } from '../Cart/cart.module';
 import { NotificationModule } from '../Notification/notification.module';
 import { TransferModule } from '../Transfer/transfer.module';
+import { ShippingModule } from '../Shipping/shipping.module';
 
 @Module({
   imports: [
     DatabaseModule,
     AuthModule,
     forwardRef(() => CartModule),
+    forwardRef(() => ShippingModule),
     NotificationModule,
     TransferModule,
   ],
@@ -21,5 +23,5 @@ import { TransferModule } from '../Transfer/transfer.module';
   providers: [OrderService, AdminOrderService],
   exports: [OrderService, AdminOrderService],
 })
-export class OrderModule {}
+export class OrderModule { }
 
