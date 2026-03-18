@@ -15,6 +15,7 @@ model Role {
 
   @@map("roles")
 }
+
 enum VehicleCondition {
   NEW
   USED
@@ -224,7 +225,7 @@ model Order {
 }
 
 model OrderDetail {
-  order_detail_id String               @id @default(uuid())
+  order_detail_id String         @id @default(uuid())
   order_id        String
   listing_id      String
   vehicle_id      String
