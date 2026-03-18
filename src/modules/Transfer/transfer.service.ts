@@ -3,6 +3,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { PayOS, APIError, Payout } from '@payos/node';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,7 @@ import {
   TransferResponse,
   TransferTransactionResponse,
 } from './dtos/transfer-response.dto';
+import { ADMIN_TRANSFER_RELATIONS } from './transfer.constants';
 
 type TransferWithTransactions = Prisma.TransferGetPayload<{
   include: { transactions: true };
@@ -22,6 +24,7 @@ type TransferWithTransactions = Prisma.TransferGetPayload<{
 
 @Injectable()
 export class TransferService {
+  private readonly logger = new Logger(TransferService.name);
   private readonly payoutClient: PayOS | null;
 
   constructor(
@@ -182,6 +185,194 @@ export class TransferService {
     });
 
     return transfers.map((transfer) => this.toTransferResponse(transfer));
+  }
+
+  async getAllTransfers(status?: string) {
+    const where = status ? { approval_state: status } : {};
+
+    const transfers = await this.prisma.transfer.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      include: ADMIN_TRANSFER_RELATIONS,
+    });
+
+    return {
+      success: true,
+      total: transfers.length,
+      data: transfers,
+    };
+  }
+
+  async executeDraftTransfer(transferId: string) {
+    const client = this.getPayoutClient();
+
+    // 1. Find and validate transfer
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { transfer_id: transferId },
+      include: { transactions: true },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Transfer không tồn tại');
+    }
+
+    if (transfer.approval_state !== 'DRAFTING') {
+      throw new BadRequestException(
+        `Transfer đang ở trạng thái "${transfer.approval_state}", chỉ có thể thực thi DRAFTING transfers`,
+      );
+    }
+
+    if (!transfer.user_id) {
+      throw new BadRequestException('Transfer không có user_id');
+    }
+
+    // 2. Lazy Fetching: Get freshest bank info from UserProfile
+    const userProfile = await this.prisma.userProfile.findUnique({
+      where: { user_id: transfer.user_id },
+      include: { user: true },
+    });
+
+    if (!userProfile || !userProfile.bank_bin || !userProfile.bank_account) {
+      throw new BadRequestException(
+        'Người dùng chưa cập nhật thông tin ngân hàng. Vui lòng yêu cầu người dùng cập nhật trước khi duyệt.',
+      );
+    }
+
+    // 3. Call PayOS SDK
+    const transaction = transfer.transactions[0];
+    if (!transaction) {
+      throw new BadRequestException('Transfer không có transaction nào');
+    }
+
+    try {
+      const payout = await client.payouts.create({
+        referenceId: transfer.reference_id,
+        amount: Number(transaction.amount),
+        description: transaction.description,
+        toBin: userProfile.bank_bin,
+        toAccountNumber: userProfile.bank_account,
+      });
+
+      // 4. Update Transfer with PayOS response
+      await this.prisma.transfer.update({
+        where: { transfer_id: transferId },
+        data: {
+          payout_id: payout.id,
+          approval_state: payout.approvalState,
+        },
+      });
+
+      // 5. Update TransferTransaction(s) with PayOS response
+      for (const payosTx of payout.transactions) {
+        await this.prisma.transferTransaction.update({
+          where: { reference_id: transaction.reference_id },
+          data: {
+            payout_transaction_id: payosTx.id,
+            to_bin: payosTx.toBin,
+            to_account_number: payosTx.toAccountNumber,
+            to_account_name: payosTx.toAccountName ?? userProfile.user.full_name,
+            reference: payosTx.reference ?? undefined,
+            transaction_datetime: this.parseTransactionDate(payosTx.transactionDatetime),
+            error_message: payosTx.errorMessage ?? undefined,
+            error_code: payosTx.errorCode ?? undefined,
+            state: payosTx.state,
+          },
+        });
+      }
+
+      this.logger.log(`[Admin] Executed transfer ${transferId} via PayOS (payout_id: ${payout.id})`);
+
+      // 6. Fetch and return the updated transfer
+      const updated = await this.prisma.transfer.findUniqueOrThrow({
+        where: { transfer_id: transferId },
+        include: ADMIN_TRANSFER_RELATIONS,
+      });
+
+      return { success: true, data: updated };
+    } catch (error) {
+      this.handlePayosError(error);
+    }
+  }
+
+
+  async rejectDraftTransfer(transferId: string, reason: string) {
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { transfer_id: transferId },
+      include: { transactions: true },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Transfer không tồn tại');
+    }
+
+    if (transfer.approval_state !== 'DRAFTING') {
+      throw new BadRequestException(
+        `Transfer đang ở trạng thái "${transfer.approval_state}", chỉ có thể từ chối DRAFTING transfers`,
+      );
+    }
+
+    // Update transfer state
+    await this.prisma.transfer.update({
+      where: { transfer_id: transferId },
+      data: { approval_state: 'REJECTED' },
+    });
+
+    // Update transaction(s) with rejection reason
+    if (transfer.transactions.length > 0) {
+      await this.prisma.transferTransaction.updateMany({
+        where: { transfer_id: transferId },
+        data: {
+          state: 'REJECTED',
+          error_message: reason,
+        },
+      });
+    }
+
+    // Notify the user
+    if (transfer.user_id) {
+      await this.prisma.notification.create({
+        data: {
+          user_id: transfer.user_id,
+          type: 'SYSTEM',
+          title: 'Lệnh chuyển tiền bị từ chối',
+          message: `Lệnh chuyển tiền (Mã: ${transfer.reference_id}) đã bị từ chối. Lý do: ${reason}`,
+          created_at: new Date(),
+        },
+      });
+    }
+
+    this.logger.log(`[Admin] Rejected transfer ${transferId}. Reason: ${reason}`);
+
+    const updated = await this.prisma.transfer.findUniqueOrThrow({
+      where: { transfer_id: transferId },
+      include: ADMIN_TRANSFER_RELATIONS,
+    });
+
+    return { success: true, data: updated };
+  }
+
+  async getMyTransferHistory(userId: string) {
+    const transfers = await this.prisma.transfer.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      include: {
+        transactions: { orderBy: { created_at: 'asc' as const } },
+        order: {
+          select: {
+            order_id: true,
+            status: true,
+            deposit_amount: true,
+            created_at: true,
+          },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      total: transfers.length,
+      data: transfers.map((t) => this.toTransferResponse(t)),
+    };
   }
 
   private async persistTransfer(
@@ -352,6 +543,121 @@ export class TransferService {
       return category.filter((item): item is string => typeof item === 'string');
     }
     return null;
+  }
+
+
+  private async createDraftTransfer(
+    userId: string,
+    orderId: string,
+    finalAmount: Prisma.Decimal,
+    description: string,
+  ) {
+    // 1. Lazy Fetching Bank Info
+    const userProfile = await this.prisma.userProfile.findUnique({
+      where: { user_id: userId },
+      include: { user: true },
+    });
+
+    const hasBankInfo = userProfile && userProfile.bank_bin && userProfile.bank_account;
+
+    // 2. Create Transfer Record (DRAFTING)
+    const referenceId = randomUUID();
+    const transfer = await this.prisma.transfer.create({
+      data: {
+        reference_id: referenceId,
+        user_id: userId,
+        order_id: orderId,
+        total_credit: finalAmount, // EXACT final amount
+        approval_state: 'DRAFTING',
+        transactions: {
+          create: {
+            reference_id: randomUUID(),
+            amount: finalAmount,
+            description: description,
+            state: 'DRAFTING',
+            to_bin: hasBankInfo ? userProfile.bank_bin : null,
+            to_account_number: hasBankInfo ? userProfile.bank_account : null,
+            to_account_name: hasBankInfo ? userProfile.user.full_name : null,
+          },
+        },
+      },
+    });
+
+    // 3. Trigger Notification if bank info is missing
+    if (!hasBankInfo) {
+      await this.prisma.notification.create({
+        data: {
+          user_id: userId,
+          type: 'SYSTEM',
+          title: 'Cập nhật thông tin ngân hàng',
+          message: `Vui lòng cập nhật thông tin tài khoản ngân hàng trong hồ sơ để chúng tôi có thể duyệt lệnh chuyển tiền (Mã: ${referenceId}).`,
+          created_at: new Date(),
+        },
+      });
+    }
+
+    return transfer;
+  }
+
+  // 1. Happy Path (Order COMPLETED)
+  async createPayoutForCompletedOrder(order: any) {
+    const totalPrice = order.orderDetails.reduce(
+      (acc: Prisma.Decimal, curr: any) => acc.add(new Prisma.Decimal(curr.total_price)),
+      new Prisma.Decimal(0),
+    );
+    const fee = totalPrice.mul(0.07); // 7% platform fee
+    const payoutAmount = totalPrice.sub(fee);
+
+    return this.createDraftTransfer(
+      order.listing.seller_id,
+      order.order_id,
+      payoutAmount,
+      `Thanh toán đơn hàng ${order.order_id.split('-')[0]} (đã trừ 7% phí)`,
+    );
+  }
+
+  // 2. SLA Timeout (Order FORFEITED)
+  async createForfeitCompensation(order: any) {
+    return this.createDraftTransfer(
+      order.listing.seller_id,
+      order.order_id,
+      new Prisma.Decimal(order.deposit_amount),
+      `Bồi thường cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua quá hạn thanh toán)`,
+    );
+  }
+
+  // 3. Seller Rejects (Order CANCELLED_BY_SELLER)
+  async createSellerRejectRefund(order: any) {
+    return this.createDraftTransfer(
+      order.buyer_id,
+      order.order_id,
+      new Prisma.Decimal(order.deposit_amount),
+      `Hoàn cọc đơn hàng ${order.order_id.split('-')[0]} (Người bán từ chối)`,
+    );
+  }
+
+  // 4. Buyer Cancels (Order CANCELLED_BY_BUYER)
+  async createBuyerCancelTransfer(order: any) {
+    // Note: status here refers to the state BEFORE cancellation.
+    // If we only have the current status, you might check if they had already paid the full amount or confirmed.
+    // E.g. we can pass the "previousStatus" safely. 
+    // Assuming 'DEPOSITED' -> Refund Buyer, else -> Compensate Seller.
+    if (order.status === 'DEPOSITED' || order.status === 'PENDING') {
+      return this.createDraftTransfer(
+        order.buyer_id,
+        order.order_id,
+        new Prisma.Decimal(order.deposit_amount),
+        `Hoàn cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua tự hủy)`,
+      );
+    } else {
+      // Order status was CONFIRMED or PAID
+      return this.createDraftTransfer(
+        order.listing.seller_id,
+        order.order_id,
+        new Prisma.Decimal(order.deposit_amount),
+        `Bồi thường cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua hủy sau xác nhận)`,
+      );
+    }
   }
 
   private parseTransactionDate(value?: string | null) {

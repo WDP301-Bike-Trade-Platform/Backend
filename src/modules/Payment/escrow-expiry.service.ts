@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from 'src/database/prisma.service';
 import { PaymentService } from './payment.service';
+import { TransferService } from '../Transfer/transfer.service';
 import { OrderStatus } from '@prisma/client';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class EscrowExpiryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly transferService: TransferService,
   ) { }
 
   /**
@@ -82,6 +84,14 @@ export class EscrowExpiryService {
       },
     });
 
+    // 3. Scenario 2: SLA Timeout -> Compensate Seller with deposit (DRAFTING)
+    try {
+      await this.transferService.createForfeitCompensation(order);
+      this.logger.log(`[Escrow] Created DRAFTING compensation transfer for Order ${order.order_id} (Forfeited)`);
+    } catch (err) {
+      this.logger.error(`[Escrow] Failed to create compensation transfer for Order ${order.order_id}`, err.stack);
+    }
+
     // 4. Gửi Notification cho Buyer (Bị mất cọc)
     await this.prisma.notification.create({
       data: {
@@ -107,3 +117,4 @@ export class EscrowExpiryService {
     this.logger.log(`Forfeit Order [${order.order_id}] THÀNH CÔNG.`);
   }
 }
+

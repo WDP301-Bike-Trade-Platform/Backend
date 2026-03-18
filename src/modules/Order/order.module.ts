@@ -7,6 +7,7 @@ import { DatabaseModule } from 'src/database/database.module';
 import { AuthModule } from '../Auth/auth.module';
 import { CartModule } from '../Cart/cart.module';
 import { NotificationModule } from '../Notification/notification.module';
+import { TransferModule } from '../Transfer/transfer.module';
 
 @Module({
   imports: [
@@ -14,9 +15,11 @@ import { NotificationModule } from '../Notification/notification.module';
     AuthModule,
     forwardRef(() => CartModule),
     NotificationModule,
+    TransferModule,
   ],
   controllers: [OrderController, AdminOrderController],
   providers: [OrderService, AdminOrderService],
   exports: [OrderService, AdminOrderService],
 })
 export class OrderModule {}
+

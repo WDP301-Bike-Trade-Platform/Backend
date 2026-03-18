@@ -136,7 +136,7 @@ export class OrderController {
     );
   }
 
-  @Patch(':id/cancel')
+  @Patch(':id/buyer-cancel')
   @Roles(1) // BUYER
   @ApiOperation({ summary: 'Buyer hủy đơn hàng' })
   @ApiResponse({ status: 200, description: 'Hủy order thành công' })

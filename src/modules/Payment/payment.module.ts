@@ -6,11 +6,13 @@ import { PaymentController } from './payment.controller';
 import { DatabaseModule } from 'src/database/database.module';
 import { AuthModule } from '../Auth/auth.module';
 import { OrderModule } from '../Order/order.module';
+import { TransferModule } from '../Transfer/transfer.module';
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, AuthModule, forwardRef(() => OrderModule)],
+  imports: [ConfigModule, DatabaseModule, AuthModule, forwardRef(() => OrderModule), TransferModule],
   controllers: [PaymentController],
   providers: [PaymentService, EscrowExpiryService],
   exports: [PaymentService],
 })
 export class PaymentModule {}
+

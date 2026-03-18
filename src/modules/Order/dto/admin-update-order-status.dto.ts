@@ -4,7 +4,7 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class AdminUpdateOrderStatusDto {
   @ApiProperty({
     description:
-      'Trạng thái mới: PENDING | DEPOSITED | CONFIRMED | COMPLETED | CANCELLED',
+      'Trạng thái mới: PENDING | DEPOSITED | CONFIRMED | COMPLETED | CANCELLED_BY_BUYER',
   })
   @IsNotEmpty()
   @IsString()

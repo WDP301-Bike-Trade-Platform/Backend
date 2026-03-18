@@ -4,12 +4,14 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -28,7 +30,42 @@ import { EstimateCreditDto } from './dtos/estimate-credit.dto';
 @Controller('transfers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TransferController {
-  constructor(private readonly transferService: TransferService) {}
+  constructor(private readonly transferService: TransferService) { }
+
+  @Get('admin/all')
+  @Roles(2, 3)
+  @ApiOperation({ summary: 'Admin: Get all transfers with order details' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by approval_state (e.g. DRAFTING, REJECTED)' })
+  async getAllTransfers(@Query('status') status?: string) {
+    return this.transferService.getAllTransfers(status);
+  }
+
+  @Post(':id/execute')
+  @Roles(2, 3)
+  @ApiOperation({ summary: 'Admin: Execute a DRAFTING transfer via PayOS' })
+  @ApiResponse({ status: 200, description: 'Transfer executed successfully' })
+  @ApiResponse({ status: 400, description: 'Bank info missing or transfer not in DRAFTING state' })
+  async executeDraftTransfer(@Param('id') id: string) {
+    return this.transferService.executeDraftTransfer(id);
+  }
+
+  @Post(':id/reject')
+  @Roles(2, 3)
+  @ApiOperation({ summary: 'Admin: Reject a DRAFTING transfer' })
+  @ApiResponse({ status: 200, description: 'Transfer rejected successfully' })
+  async rejectDraftTransfer(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.transferService.rejectDraftTransfer(id, reason);
+  }
+
+  @Get('my-history')
+  @Roles(1, 2, 3)
+  @ApiOperation({ summary: 'Get my transfer/refund history' })
+  async getMyHistory(@Req() req: Request & { user: JwtUser }) {
+    return this.transferService.getMyTransferHistory(req.user.user_id);
+  }
 
   @Post()
   @Roles(2, 3)
@@ -95,3 +132,4 @@ export class TransferController {
     return this.transferService.getTransferById(transferId, req.user.user_id);
   }
 }
+

@@ -5,12 +5,14 @@ import {
   ForbiddenException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { Prisma, OrderStatus, PaymentStatus, Address } from '@prisma/client';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderFromCartDto } from './dto/create-order-from-cart.dto';
 import { CartService } from '../Cart/cart.service';
+import { TransferService } from '../Transfer/transfer.service';
 import { ESCROW_RULES, SupportedPaymentMethod } from './order.constants';
 
 const ORDER_RELATIONS = {
@@ -84,12 +86,14 @@ interface PaymentPipelineParams {
 
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
   private readonly depositRate = new Prisma.Decimal(ESCROW_RULES.DEPOSIT_RATE);
 
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => CartService))
     private cartService: CartService,
+    private readonly transferService: TransferService,
   ) { }
 
   /**
@@ -509,7 +513,13 @@ export class OrderService {
         data: { status: PaymentStatus.FAILED },
       });
 
-      // TODO: Logic refund deposit cho buyer
+      // Scenario 3: Seller Rejects -> Refund deposit to Buyer (DRAFTING)
+      try {
+        await this.transferService.createSellerRejectRefund(updatedOrder);
+        this.logger.log(`[Escrow] Created DRAFTING refund transfer for Order ${orderId} (Seller Reject)`);
+      } catch (err) {
+        this.logger.error(`[Escrow] Failed to create refund transfer for Order ${orderId}`, err.stack);
+      }
     }
 
     await this.prisma.notification.create({
@@ -553,11 +563,13 @@ export class OrderService {
     }
 
     const depositPaid = this.isDepositPaid(order);
+    // CRITICAL: Capture the previous status BEFORE updating to CANCELLED_BY_BUYER
+    const previousStatus = order.status;
 
     const updatedOrder = await this.prisma.order.update({
       where: { order_id: orderId },
       data: {
-        status: OrderStatus.CANCELLED,
+        status: OrderStatus.CANCELLED_BY_BUYER,
       },
       include: ORDER_RELATIONS,
     });
@@ -585,6 +597,16 @@ export class OrderService {
         where: { order_id: orderId },
         data: { status: PaymentStatus.FAILED },
       });
+
+      // Scenario 4: Buyer Cancels -> pass the PREVIOUS status to determine refund vs compensation
+      try {
+        // We pass the order with the PREVIOUS status so TransferService knows the context
+        const orderWithPreviousStatus = { ...updatedOrder, status: previousStatus };
+        await this.transferService.createBuyerCancelTransfer(orderWithPreviousStatus);
+        this.logger.log(`[Escrow] Created DRAFTING transfer for Order ${orderId} (Buyer Cancel, was ${previousStatus})`);
+      } catch (err) {
+        this.logger.error(`[Escrow] Failed to create transfer for Order ${orderId}`, err.stack);
+      }
     }
 
     await this.prisma.notification.create({
@@ -750,6 +772,14 @@ export class OrderService {
         created_at: new Date(),
       },
     });
+
+    // Scenario 1: Happy Path -> Payout to Seller minus 7% platform fee (DRAFTING)
+    try {
+      await this.transferService.createPayoutForCompletedOrder(updatedOrder);
+      this.logger.log(`[Escrow] Created DRAFTING payout transfer for Order ${orderId} (Completed)`);
+    } catch (err) {
+      this.logger.error(`[Escrow] Failed to create payout transfer for Order ${orderId}`, err.stack);
+    }
 
     return {
       success: true,

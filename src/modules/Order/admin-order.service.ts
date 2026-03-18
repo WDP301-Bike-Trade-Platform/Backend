@@ -64,18 +64,18 @@ const ALLOWED_STATUSES: ReadonlySet<string> = new Set(
 const STATUS_TRANSITIONS: Record<string, ReadonlySet<string>> = {
   [OrderStatus.PENDING]: new Set([
     OrderStatus.CONFIRMED,
-    OrderStatus.CANCELLED,
+    OrderStatus.CANCELLED_BY_BUYER,
   ]),
   [OrderStatus.DEPOSITED]: new Set([
     OrderStatus.CONFIRMED,
-    OrderStatus.CANCELLED,
+    OrderStatus.CANCELLED_BY_BUYER,
   ]),
   [OrderStatus.CONFIRMED]: new Set([
     OrderStatus.COMPLETED,
-    OrderStatus.CANCELLED,
+    OrderStatus.CANCELLED_BY_BUYER,
   ]),
   [OrderStatus.COMPLETED]: new Set(),
-  [OrderStatus.CANCELLED]: new Set(),
+  [OrderStatus.CANCELLED_BY_BUYER]: new Set(),
 };
 
 /* ── Service ─────────────────────────────────────────────── */
@@ -186,7 +186,7 @@ export class AdminOrderService {
     }
 
     switch (targetStatus) {
-      case OrderStatus.CANCELLED:
+      case OrderStatus.CANCELLED_BY_BUYER:
         return this.cancelOrderAdmin(order, dto.reason);
       case OrderStatus.CONFIRMED:
         return this.confirmOrderAdmin(order, dto.reason);
@@ -211,7 +211,7 @@ export class AdminOrderService {
     await this.prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { order_id: order.order_id },
-        data: { status: OrderStatus.CANCELLED },
+        data: { status: OrderStatus.CANCELLED_BY_BUYER },
       });
 
       // Phục hồi listing

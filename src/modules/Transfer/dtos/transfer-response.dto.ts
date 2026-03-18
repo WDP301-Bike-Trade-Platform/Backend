@@ -4,8 +4,8 @@ export interface TransferTransactionResponse {
   payoutTransactionId?: string | null;
   amount: number;
   description: string;
-  toBin: string;
-  toAccountNumber: string;
+  toBin?: string | null;
+  toAccountNumber?: string | null;
   toAccountName?: string | null;
   reference?: string | null;
   transactionDatetime?: Date | null;
