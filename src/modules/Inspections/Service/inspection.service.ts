@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { InspectionRequestStatus, InspectionStatus, NotificationType } from '@prisma/client';
+import { InspectionRequestStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from 'src/database/prisma.service';
 import {
   CreateInspectionDto,

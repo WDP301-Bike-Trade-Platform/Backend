@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -12,6 +13,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderFromCartDto } from './dto/create-order-from-cart.dto';
 import { CartService } from '../Cart/cart.service';
 import { ESCROW_RULES, SupportedPaymentMethod } from './order.constants';
+import { ShippingDemoService } from '../Shipping/Service/shipping.service';
 
 const ORDER_RELATIONS = {
   listing: {
@@ -84,13 +86,16 @@ interface PaymentPipelineParams {
 
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
   private readonly depositRate = new Prisma.Decimal(ESCROW_RULES.DEPOSIT_RATE);
 
   constructor(
     private prisma: PrismaService,
     @Inject(forwardRef(() => CartService))
     private cartService: CartService,
-  ) { }
+    @Inject(forwardRef(() => ShippingDemoService))
+    private shippingService: ShippingDemoService,
+  ) {}
 
   /**
    * Tạo order mới từ listing
@@ -152,7 +157,7 @@ export class OrderService {
         }
 
         const totalAmount = new Prisma.Decimal(listing.vehicle.price);
-        const requiresDeposit = dto.isDeposit ?? false; // 👈 10% custom deposit decision
+        const requiresDeposit = dto.isDeposit ?? false;
         const depositAmount = this.calculateDepositAmount(
           totalAmount,
           requiresDeposit,
@@ -198,7 +203,7 @@ export class OrderService {
           note: dto.note,
         });
 
-        // Đánh dấu listing là SOLD ngay khi tạo order để không hiện trên homescreen
+        // Đánh dấu listing là SOLD ngay khi tạo order
         await tx.listing.update({
           where: { listing_id: dto.listingId },
           data: { status: 'SOLD' },
@@ -262,7 +267,7 @@ export class OrderService {
             0,
           );
           const totalAmount = new Prisma.Decimal(totalAmountNumber);
-          const requiresDeposit = dto.isDeposit ?? false; // 👈 10% custom deposit decision
+          const requiresDeposit = dto.isDeposit ?? false;
           const depositAmount = this.calculateDepositAmount(
             totalAmount,
             requiresDeposit,
@@ -310,7 +315,7 @@ export class OrderService {
             note: dto.note,
           });
 
-          // Đánh dấu tất cả listings là SOLD ngay khi tạo order
+          // Đánh dấu tất cả listings là SOLD
           const listingIds = items.map((item) => item.listingId);
           await tx.listing.updateMany({
             where: { listing_id: { in: listingIds } },
@@ -562,7 +567,7 @@ export class OrderService {
       include: ORDER_RELATIONS,
     });
 
-    // Chuyển tất cả listings của order về ACTIVE
+    // Chuyển tất cả listings của order về APPROVED (hoặc ACTIVE)
     const listingIds = order.orderDetails.map((d) => d.listing_id);
     if (!listingIds.includes(order.listing_id)) {
       listingIds.push(order.listing_id);
@@ -606,6 +611,7 @@ export class OrderService {
 
   /**
    * Cập nhật order status (từ payment webhook)
+   * Đây là nơi tích hợp shipping tự động sau khi thanh toán thành công
    */
   async updateOrderStatus(
     orderId: string,
@@ -616,7 +622,7 @@ export class OrderService {
       paymentCode?: number | string;
     },
   ) {
-    // Bước 1: Transaction chỉ chứa write operations (tránh timeout trên Render free tier)
+    // Bước 1: Transaction chỉ chứa write operations
     const txResult = await this.prisma.$transaction(
       async (tx) => {
         const order = await tx.order.findUnique({
@@ -639,7 +645,6 @@ export class OrderService {
 
         let nextStatus = status;
         if (status === OrderStatus.DEPOSITED) {
-
           await tx.payment.updateMany({
             where: {
               order_id: orderId,
@@ -675,7 +680,7 @@ export class OrderService {
         if (status === OrderStatus.DEPOSITED) {
           await tx.listing.update({
             where: { listing_id: order.listing_id },
-            data: { status: 'RESERVED' }, // 👈 Locks item temporarily
+            data: { status: 'RESERVED' },
           });
         }
 
@@ -684,7 +689,7 @@ export class OrderService {
       { timeout: 15000 },
     );
 
-    // Bước 2: Tạo notification bên ngoài transaction (không cần atomicity)
+    // Bước 2: Tạo notification bên ngoài transaction
     if (status === OrderStatus.DEPOSITED) {
       await this.prisma.notification.createMany({
         data: [
@@ -703,6 +708,11 @@ export class OrderService {
             created_at: new Date(),
           },
         ],
+      });
+
+      // 🔥 TỰ ĐỘNG TẠO SHIPMENT (bất đồng bộ)
+      this.shippingService.createShipmentFromOrder(orderId).catch(err => {
+        this.logger.error(`Auto-create shipment failed for order ${orderId}: ${err.message}`);
       });
     }
 
@@ -757,6 +767,8 @@ export class OrderService {
     };
   }
 
+  // ==================== PRIVATE METHODS ====================
+
   private normalizePaymentMethod(method?: string): SupportedPaymentMethod {
     const normalized = (method ?? 'PAYOS').trim().toUpperCase();
     if (normalized !== 'COD' && normalized !== 'PAYOS') {
@@ -764,7 +776,6 @@ export class OrderService {
     }
     return normalized;
   }
-
 
   private calculateDepositAmount(
     totalAmount: Prisma.Decimal,
