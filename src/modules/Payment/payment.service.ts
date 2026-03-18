@@ -29,9 +29,9 @@ export class PaymentService {
   }
 
   /**
-   * Tạo payment link cho order (Hỗ trợ DEPOSIT hoặc REMAINING)
+   * Tạo payment link cho order (Hỗ trợ DEPOSIT, REMAINING, hoặc FULL)
    */
-  async createPaymentLinkForOrder(orderId: string, buyerId: string, paymentStage: 'DEPOSIT' | 'REMAINING' = 'DEPOSIT', platform: 'WEB' | 'MOBILE' = 'MOBILE') {
+  async createPaymentLinkForOrder(orderId: string, buyerId: string, paymentStage: 'DEPOSIT' | 'REMAINING' | 'FULL' = 'FULL', platform: 'WEB' | 'MOBILE' = 'MOBILE') {
     try {
       // Lấy thông tin order với các order details
       const order = await this.prisma.order.findUnique({
@@ -62,17 +62,24 @@ export class PaymentService {
 
       // Generate unique order code từ timestamp
       const orderCode = Number(Date.now().toString().slice(-9));
+      const totalPrice = order.orderDetails.reduce((acc, curr) => acc + Number(curr.total_price), 0);
 
-      const isDeposit = paymentStage === 'DEPOSIT';
       let amountToCharge = 0;
+      let stagePrefix = '';
 
-      if (isDeposit) {
+      if (paymentStage === 'FULL') {
+        if (order.status !== 'PENDING') {
+          throw new BadRequestException('FULL payment can only be created for PENDING orders');
+        }
+        amountToCharge = totalPrice;
+        stagePrefix = 'FUL';
+      } else if (paymentStage === 'DEPOSIT') {
         if (order.status !== 'PENDING') {
           throw new BadRequestException('Payment link for DEPOSIT can only be created for PENDING orders');
         }
         amountToCharge = Number(order.deposit_amount);
-      } else {
-        // Stage = REMAINING
+        stagePrefix = 'DEP';
+      } else if (paymentStage === 'REMAINING') {
         if (order.status !== 'CONFIRMED') {
           throw new BadRequestException('Remaining payment can only be made for CONFIRMED orders');
         }
@@ -89,16 +96,13 @@ export class PaymentService {
           throw new BadRequestException('The 3-minute window for the remaining payment has expired.');
         }
 
-        const totalPrice = order.orderDetails.reduce((acc, curr) => acc + Number(curr.total_price), 0);
         amountToCharge = totalPrice - Number(order.deposit_amount);
+        stagePrefix = 'REM';
 
         if (amountToCharge <= 0) {
           throw new BadRequestException('Remaining amount is 0 or negative. No further payment required.');
         }
       }
-
-      const stagePrefix = isDeposit ? 'DEP' : 'REM';
-
 
       // Chuẩn bị items cho PayOS
       const items = order.orderDetails.map((detail) => ({
@@ -107,9 +111,10 @@ export class PaymentService {
         price: Number(detail.unit_price),
       }));
 
-      await this.ensurePendingPaymentRecord(order.order_id, new Prisma.Decimal(amountToCharge), isDeposit ? 'DEPOSIT' : 'REMAINING');
+      await this.ensurePendingPaymentRecord(order.order_id, new Prisma.Decimal(amountToCharge), paymentStage, orderCode);
 
       // description cannot exceed 25 characters on PayOS, we put Stage Prefix at the start
+      // Strict 8-character shortOrderId avoiding dashes
       const shortOrderId = order.order_id.replace(/-/g, '').substring(0, 8);
 
       const returnUrl = this.buildRedirectUrl(platform, 'success', { orderId, orderCode: orderCode.toString() });
@@ -158,7 +163,8 @@ export class PaymentService {
   private async ensurePendingPaymentRecord(
     orderId: string,
     amount: Prisma.Decimal,
-    stage: 'DEPOSIT' | 'REMAINING'
+    stage: 'DEPOSIT' | 'REMAINING' | 'FULL',
+    orderCode: number
   ) {
     const pendingPayment = await this.prisma.payment.findFirst({
       where: {
@@ -172,6 +178,7 @@ export class PaymentService {
       const paymentInfo = await this.prisma.payment.create({
         data: {
           order_id: orderId,
+          order_code: BigInt(orderCode),
           method: 'PAYOS',
           amount: amount,
           status: PaymentStatus.PENDING,
@@ -179,10 +186,13 @@ export class PaymentService {
         },
       });
 
-      // Track deposit record if this is the deposit stage
-      if (stage === 'DEPOSIT') {
+      // Track deposit record if this is the deposit or full stage
+      if (stage === 'DEPOSIT' || stage === 'FULL') {
         const order = await this.prisma.order.findUnique({ where: { order_id: orderId } });
         if (order) {
+          // If FULL, deposit amount is recorded as the original deposit_amount, 
+          // or we just record the full amount to the payment_deposit table based on logic. 
+          // Keeping original behavior: log the amount requested for this payment link.
           await this.prisma.paymentDeposit.create({
             data: {
               order_id: orderId,
@@ -198,10 +208,10 @@ export class PaymentService {
       return;
     }
 
-    if (pendingPayment.amount.toString() !== amount.toString()) {
+    if (pendingPayment.amount.toString() !== amount.toString() || pendingPayment.order_code?.toString() !== orderCode.toString()) {
       await this.prisma.payment.update({
         where: { payment_id: pendingPayment.payment_id },
-        data: { amount },
+        data: { amount, order_code: BigInt(orderCode) },
       });
     }
   }
@@ -273,50 +283,56 @@ export class PaymentService {
         };
       }
 
-      // Description is format "DEP<shortOrderId>" or "REM<shortOrderId>"
-      const rawDesc: string = verifiedData.description;
+      // Lấy orderCode từ webhook (PayOS luôn trả đúng orderCode ta đã gửi)
+      const payosOrderCode = Number(verifiedData.orderCode);
+
+      if (!payosOrderCode) {
+        return {
+          success: false,
+          message: 'Missing orderCode',
+          data: verifiedData,
+        };
+      }
+
+      // Description is format "DEP<shortOrderId>", "REM<shortOrderId>", or "FUL<shortOrderId>"
+      const rawDesc: string = verifiedData.description || '';
       const isDeposit = rawDesc.startsWith('DEP');
       const isRemaining = rawDesc.startsWith('REM');
+      const isFull = rawDesc.startsWith('FUL');
 
-      // The order_id startsWith the 8 char footprint.
-      // E.g: "DEPabc12345" -> prefix searches "abc12345"
-      const shortIdLength = 8;
-      const orderIdIndex = isDeposit || isRemaining ? 3 : 0;
-      const orderIdPrefix = rawDesc.substring(orderIdIndex, orderIdIndex + shortIdLength);
-
-      // Tìm order dựa vào orderId prefix từ description
-      const order = await this.prisma.order.findFirst({
+      // Tìm Payment mapping chuẩn nhất dựa trên order_code thay vì cắt chuỗi description
+      const paymentMapping = await this.prisma.payment.findUnique({
         where: {
-          order_id: {
-            startsWith: orderIdPrefix,
-          },
-          status: {
-            in: ['PENDING', 'CONFIRMED'] // Could be PENDING (for DEPOSIT) or CONFIRMED (for REMAINING)
-          }
+          order_code: BigInt(payosOrderCode),
         },
         include: {
-          buyer: {
-            select: {
-              user_id: true,
-              full_name: true,
-              email: true,
-            },
-          },
-          listing: {
+          order: {
             include: {
-              vehicle: true,
-              seller: {
+              buyer: {
                 select: {
                   user_id: true,
                   full_name: true,
+                  email: true,
                 },
               },
-            },
-          },
-        },
+              orderDetails: true,
+              listing: {
+                include: {
+                  vehicle: true,
+                  seller: {
+                    select: {
+                      user_id: true,
+                      full_name: true,
+                    },
+                  },
+                },
+              },
+            }
+          }
+        }
       });
 
-      if (!order) {
+      if (!paymentMapping || !paymentMapping.order) {
         return {
           success: false,
           message: 'Order not found',
@@ -324,24 +340,44 @@ export class PaymentService {
         };
       }
 
+      const order = paymentMapping.order;
+
+      const totalPrice = order.orderDetails.reduce((acc, curr) => acc + Number(curr.total_price), 0);
       let nextStatus = order.status;
 
-      if (isDeposit || (!isDeposit && !isRemaining)) {
-        // Legacy or explicit DEP prefix -> deposit phase
+      // Logic: Validate paid amount >= required amount for security
+      const amountPaid = verifiedData.amount;
+
+      if (isFull || amountPaid >= totalPrice) {
+        // FULL payment from PENDING -> PAID
+        if (order.status === 'PENDING') {
+          const updateResult = await this.orderService.updateOrderStatus(
+            order.order_id,
+            OrderStatus.PAID,
+            {
+              paymentMethod: 'PAYOS',
+              paidAmount: amountPaid,
+              paymentCode: verifiedData.orderCode,
+            },
+          );
+          nextStatus = updateResult.data?.status ?? OrderStatus.PAID;
+        }
+      } else if (isDeposit || (!isDeposit && !isRemaining && !isFull)) {
+        // Explicit DEP prefix -> PENDING -> DEPOSITED phase
         if (order.status === 'PENDING') {
           const updateResult = await this.orderService.updateOrderStatus(
             order.order_id,
             OrderStatus.DEPOSITED,
             {
               paymentMethod: 'PAYOS',
-              paidAmount: verifiedData.amount,
+              paidAmount: amountPaid,
               paymentCode: verifiedData.orderCode,
             },
           );
           nextStatus = updateResult.data?.status ?? OrderStatus.DEPOSITED;
         }
       } else if (isRemaining) {
-        // REMAINING payment successful
+        // REMAINING payment -> CONFIRMED -> PAID phase
         if (order.status === 'CONFIRMED') {
           await this.prisma.payment.updateMany({
             where: {
@@ -360,7 +396,7 @@ export class PaymentService {
             OrderStatus.PAID,
             {
               paymentMethod: 'PAYOS',
-              paidAmount: verifiedData.amount,
+              paidAmount: amountPaid,
               paymentCode: verifiedData.orderCode,
             },
           );
@@ -369,7 +405,7 @@ export class PaymentService {
           await this.prisma.notification.createMany({
             data: [
               {
-                user_id: order.listing.seller.user_id,
+                user_id: order.listing.seller_id,
                 type: 'ORDER',
                 title: 'Remaining Amount Paid',
                 message: `The buyer has successfully paid the remaining amount for ${order.listing.vehicle.brand} ${order.listing.vehicle.model}.`,
@@ -400,7 +436,7 @@ export class PaymentService {
       };
     } catch (error) {
       const msg = error.message as string;
-      const isSignatureError = msg.toLowerCase().includes('signature');
+      const isSignatureError = msg?.toLowerCase()?.includes('signature');
       return {
         success: false,
         message: isSignatureError ? 'Invalid webhook signature' : 'Webhook processing failed',

@@ -257,6 +257,7 @@ model OrderAddress {
 model Payment {
   payment_id   String           @id @default(uuid())
   order_id     String
+  order_code   BigInt?          @unique
   method       String
   amount       Decimal
   platform_fee Decimal?

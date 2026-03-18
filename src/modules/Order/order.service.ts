@@ -663,7 +663,7 @@ export class OrderService {
         }
 
         let nextStatus = status;
-        if (status === OrderStatus.DEPOSITED) {
+        if (status === OrderStatus.DEPOSITED || status === OrderStatus.PAID) {
           await tx.payment.updateMany({
             where: {
               order_id: orderId,
@@ -696,7 +696,7 @@ export class OrderService {
           },
         });
 
-        if (status === OrderStatus.DEPOSITED) {
+        if (status === OrderStatus.DEPOSITED || status === OrderStatus.PAID) {
           await tx.listing.update({
             where: { listing_id: order.listing_id },
             data: { status: 'RESERVED' },
@@ -709,7 +709,7 @@ export class OrderService {
     );
 
     // Bước 2: Tạo notification bên ngoài transaction
-    if (status === OrderStatus.DEPOSITED) {
+    if (status === OrderStatus.DEPOSITED || status === OrderStatus.PAID) {
       await this.prisma.notification.createMany({
         data: [
           {
