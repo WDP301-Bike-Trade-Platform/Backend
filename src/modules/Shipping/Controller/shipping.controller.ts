@@ -29,7 +29,7 @@ export class ShippingController {
   @Get('order/:orderId')
   @Roles(1,3)
   @ApiOperation({ 
-    summary: '[USER] Lấy thông tin vận chuyển của một đơn hàng',
+    summary: '[USER,Admin] Lấy thông tin vận chuyển của một đơn hàng',
     description: `
       - **USER:** chỉ xem được shipment của đơn hàng do mình mua (kiểm tra trong service)
       - **ADMIN:** xem được bất kỳ shipment nào
@@ -131,10 +131,12 @@ export class ShippingController {
   }
 
   // Có thể thêm endpoint GET tất cả shipments cho admin (nếu cần)
-  @Get()
-  @Roles(3)
-  @ApiOperation({ summary: '[ADMIN] Lấy danh sách tất cả shipments (phân trang)' })
-  async findAll(@Query() query: any) {
-    // TODO: Implement nếu cần
-  }
+// shipping.controller.ts
+    @Get()
+    @Roles(3) // ADMIN
+    @ApiOperation({ summary: '[ADMIN] Lấy danh sách tất cả shipments (phân trang)' })
+    @ApiResponse({ status: 200, description: 'Danh sách shipments' })
+    async findAll(@Query() query: ShipmentQueryDto) {
+    return this.shippingService.findAll(query);
+    }
 }

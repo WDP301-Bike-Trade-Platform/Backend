@@ -18,6 +18,35 @@ export class ShippingDemoService {
    * Tạo shipment giả sau khi thanh toán thành công
    * (Chỉ ADMIN được gọi – controller đã check)
    */
+  // shipping.service.ts
+    async findAll(query: ShipmentQueryDto): Promise<{ total: number; items: ShipmentResponseDto[] }> {
+    const { skip = 0, take = 10, status } = query;
+
+    const where: any = {};
+    if (status) {
+        where.status = status;
+    }
+
+    const [total, shipments] = await this.prisma.$transaction([
+        this.prisma.shipment.count({ where }),
+        this.prisma.shipment.findMany({
+        where,
+        include: {
+            trackings: {
+            orderBy: { tracked_at: 'desc' },
+            },
+        },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take,
+        }),
+    ]);
+
+    return {
+        total,
+        items: shipments.map(s => this.mapToResponse(s)),
+    };
+    }
   async createShipmentFromOrder(orderId: string): Promise<ShipmentResponseDto> {
     // Kiểm tra order
     const order = await this.prisma.order.findUnique({
