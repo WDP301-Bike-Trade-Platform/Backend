@@ -16,20 +16,25 @@ export class EscrowExpiryService {
   ) { }
 
   /**
-   * Chạy mỗi phút để tìm các đơn hàng đã CONFIRMED quá 3 phút (SLA test)
+   * Chạy mỗi phút để tìm các đơn hàng đã CONFIRMED quá 5 phút (SLA test)
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async processExpiredEscrows() {
-    this.logger.log('Bắt đầu kiểm tra các Escrow quá hạn (3 phút SLA)...');
+    this.logger.log('Bắt đầu kiểm tra các Escrow quá hạn (5 phút SLA)...');
 
     const timeoutLimit = new Date();
-    timeoutLimit.setMinutes(timeoutLimit.getMinutes() - 3);
+    timeoutLimit.setMinutes(timeoutLimit.getMinutes() - 5);
 
     const expiredOrders = await this.prisma.order.findMany({
       where: {
         status: OrderStatus.CONFIRMED,
         confirmed_at: {
           lt: timeoutLimit,
+        },
+        payments: {
+          none: {
+            method: 'COD',
+          },
         },
       },
       include: {
@@ -45,7 +50,7 @@ export class EscrowExpiryService {
     });
 
     if (expiredOrders.length === 0) {
-      this.logger.log('Không có đơn hàng nào bị quá hạn thanh toán 3 phút.');
+      this.logger.log('Không có đơn hàng nào bị quá hạn thanh toán 5 phút.');
       return;
     }
 

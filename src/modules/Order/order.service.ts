@@ -909,6 +909,7 @@ export class OrderService {
   private buildOrderMeta(order: OrderWithRelations): OrderMeta {
     const totalAmount = this.sumOrderDetails(order.orderDetails);
     const depositAmount = Number(order.deposit_amount);
+    const depositRequired = (order.paymentDeposits?.length ?? 0) > 0;
     const depositPaid = this.isDepositPaid(order);
     const paymentMethod = this.resolvePrimaryPaymentMethod(order.payments);
 
@@ -916,7 +917,7 @@ export class OrderService {
       paymentMethod,
       totalAmount: this.toNumber(totalAmount),
       depositAmount: depositAmount,
-      depositRequired: depositAmount > 0,
+      depositRequired,
       depositPaid,
     };
   }
