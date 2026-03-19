@@ -23,15 +23,26 @@ export class ShippingController {
   constructor(private readonly shippingService: ShippingDemoService) {}
 
   /**
-   * ==================== USER ENDPOINTS ====================
-   * Dành cho người mua (USER) xem thông tin vận chuyển của đơn hàng mình đã mua.
+   * ==================== ADMIN GET ALL ENDPOINTS ====================
+   * MUST BE FIRST - before other GET endpoints
+   */
+  @Get()
+  @Roles(3)
+  @ApiOperation({ summary: '[ADMIN] Lấy danh sách tất cả shipments (phân trang)' })
+  @ApiResponse({ status: 200, description: 'Danh sách shipments' })
+  async findAll(@Query() query: ShipmentQueryDto) {
+    return this.shippingService.findAll(query);
+  }
+
+  /**
+   * ==================== SPECIFIC ROUTES (must be before :shipmentId) ====================
    */
   @Get('order/:orderId')
   @Roles(1,3)
   @ApiOperation({ 
     summary: '[USER,Admin] Lấy thông tin vận chuyển của một đơn hàng',
     description: `
-      - **USER:** chỉ xem được shipment của đơn hàng do mình mua (kiểm tra trong service)
+      - **USER:** chỉ xem được shipment của đơn hàng do mình mua
       - **ADMIN:** xem được bất kỳ shipment nào
       - Kết quả trả về chi tiết shipment kèm danh sách tracking.
     `
@@ -45,26 +56,51 @@ export class ShippingController {
   ): Promise<ShipmentResponseDto> {
     return this.shippingService.getShipmentByOrder(orderId, req.user.user_id, req.user.role_name);
   }
+
   @Get('my-shipments')
-    @Roles(1)
-    @ApiOperation({ 
+  @Roles(1)
+  @ApiOperation({ 
     summary: '[USER] Lấy danh sách vận chuyển của tôi',
     description: `
         - **USER:** lấy tất cả shipments liên quan đến user (vai trò buyer hoặc seller)
         - Hỗ trợ phân trang (skip, take) và lọc theo status
     `
-    })
-    @ApiResponse({ status: 200, description: 'Danh sách shipments' })
-    async getMyShipments(
+  })
+  @ApiResponse({ status: 200, description: 'Danh sách shipments' })
+  async getMyShipments(
     @Req() req: RequestWithUser,
     @Query() query: ShipmentQueryDto,
-    ) {
+  ) {
     return this.shippingService.getMyShipments(
         req.user.user_id,
         req.user.role_name,
         query,
     );
-    }
+  }
+
+  /**
+   * ==================== GENERIC ROUTE (MUST BE LAST) ====================
+   * :shipmentId match any ID - must be placed last to avoid matching specific routes above
+   */
+  @Get(':shipmentId')
+  @Roles(1,3)
+  @ApiOperation({ 
+    summary: '[USER,ADMIN] Lấy chi tiết thông tin vận chuyển theo shipment ID',
+    description: `
+      - **USER:** chỉ xem được shipment của đơn hàng do mình mua hoặc bán
+      - **ADMIN:** xem được chi tiết bất kỳ shipment nào
+      - Kết quả trả về chi tiết shipment kèm danh sách tracking.
+    `
+  })
+  @ApiResponse({ status: 200, description: 'Thông tin shipment', type: ShipmentResponseDto })
+  @ApiResponse({ status: 403, description: 'Không có quyền xem' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy shipment' })
+  async getShipmentById(
+    @Param('shipmentId') shipmentId: string,
+    @Req() req: RequestWithUser,
+  ): Promise<ShipmentResponseDto> {
+    return this.shippingService.getShipmentById(shipmentId, req.user.user_id, req.user.role_name);
+  }
   /**
    * ==================== SELLER ENDPOINTS ====================
    * Dành cho người bán (USER) xác nhận chuẩn bị hàng, cập nhật trạng thái thủ công.
@@ -129,14 +165,4 @@ export class ShippingController {
   async createShipment(@Body() dto: CreateShipmentDto): Promise<ShipmentResponseDto> {
     return this.shippingService.createShipmentFromOrder(dto.orderId);
   }
-
-  // Có thể thêm endpoint GET tất cả shipments cho admin (nếu cần)
-// shipping.controller.ts
-    @Get()
-    @Roles(3) // ADMIN
-    @ApiOperation({ summary: '[ADMIN] Lấy danh sách tất cả shipments (phân trang)' })
-    @ApiResponse({ status: 200, description: 'Danh sách shipments' })
-    async findAll(@Query() query: ShipmentQueryDto) {
-    return this.shippingService.findAll(query);
-    }
 }

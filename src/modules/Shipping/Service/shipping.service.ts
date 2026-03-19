@@ -184,6 +184,51 @@ async getMyShipments(
   };
 }
   /**
+   * Lấy shipment theo shipment ID (với kiểm tra quyền nếu user không phải admin)
+   */
+  async getShipmentById(
+    shipmentId: string,
+    userId?: string,
+    roleName?: string,
+  ): Promise<ShipmentResponseDto> {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { shipment_id: shipmentId },
+      include: {
+        trackings: {
+          orderBy: { tracked_at: 'desc' }
+        },
+        order: true,
+      }
+    });
+    if (!shipment) throw new NotFoundException('Shipment not found');
+
+    // Kiểm tra quyền nếu user không phải admin
+    if (roleName !== 'ADMIN' && userId) {
+      const order = shipment.order;
+      if (!order) throw new NotFoundException('Order not found');
+
+      // Kiểm tra user là buyer
+      const isBuyer = order.buyer_id === userId;
+      
+      // Kiểm tra user là seller
+      let isSeller = false;
+      if (order.listing_id) {
+        const listing = await this.prisma.listing.findUnique({
+          where: { listing_id: order.listing_id },
+          select: { seller_id: true }
+        });
+        isSeller = listing?.seller_id === userId;
+      }
+
+      if (!isBuyer && !isSeller) {
+        throw new BadRequestException('You do not have permission to view this shipment');
+      }
+    }
+
+    return this.mapToResponse(shipment);
+  }
+
+  /**
    * Lấy shipment theo order (có kiểm tra quyền ở controller, nên service không cần check)
    * Nhận thêm userId, roleName để tương thích với controller
    */
