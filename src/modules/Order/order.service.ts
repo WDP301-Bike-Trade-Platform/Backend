@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
-import { Prisma, OrderStatus, PaymentStatus, Address } from '@prisma/client';
+import { Prisma, OrderStatus, PaymentStatus, Address, ShipmentStatus } from '@prisma/client';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderFromCartDto } from './dto/create-order-from-cart.dto';
 import { CartService } from '../Cart/cart.service';
@@ -59,6 +59,14 @@ const ORDER_RELATIONS = {
     },
   },
   paymentDeposits: true,
+  shipment: {
+    select: {
+      shipment_id: true,
+      status: true,
+      estimated_delivery: true,
+      delivered_at: true,
+    },
+  },
 } as const;
 
 type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -758,8 +766,21 @@ export class OrderService {
       throw new ForbiddenException('You are not the buyer of this order');
     }
 
-    if (order.status !== OrderStatus.CONFIRMED) {
-      throw new BadRequestException('Only confirmed orders can be completed');
+    if (order.status !== OrderStatus.CONFIRMED && order.status !== OrderStatus.PAID) {
+      throw new BadRequestException('Only confirmed or paid orders can be completed');
+    }
+
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { order_id: orderId },
+      select: { status: true },
+    });
+
+    if (!shipment) {
+      throw new BadRequestException('Order cannot be completed before shipment is created');
+    }
+
+    if (shipment.status !== ShipmentStatus.DELIVERED) {
+      throw new BadRequestException('Order can only be completed when shipment is delivered');
     }
 
     const updatedOrder = await this.prisma.order.update({
