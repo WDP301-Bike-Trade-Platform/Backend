@@ -141,14 +141,13 @@ export class TransferService {
 
   async getTransferById(
     transferId: string,
-    userId: string,
   ): Promise<TransferResponse> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { transfer_id: transferId },
       include: { transactions: true },
     });
 
-    if (!transfer || transfer.user_id !== userId) {
+    if (!transfer) {
       throw new NotFoundException('Transfer not found');
     }
 
@@ -158,14 +157,13 @@ export class TransferService {
 
   async getTransferByReference(
     referenceId: string,
-    userId: string,
   ): Promise<TransferResponse> {
     const transfer = await this.prisma.transfer.findUnique({
       where: { reference_id: referenceId },
       include: { transactions: true },
     });
 
-    if (!transfer || transfer.user_id !== userId) {
+    if (!transfer) {
       throw new NotFoundException('Transfer not found');
     }
 
@@ -612,7 +610,7 @@ export class TransferService {
       order.listing.seller_id,
       order.order_id,
       payoutAmount,
-      `Thanh toán đơn hàng ${order.order_id.split('-')[0]} (đã trừ 7% phí)`,
+      `Thanh toan DH ${order.order_id.split('-')[0]}`,
     );
   }
 
@@ -622,7 +620,7 @@ export class TransferService {
       order.listing.seller_id,
       order.order_id,
       new Prisma.Decimal(order.deposit_amount),
-      `Bồi thường cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua quá hạn thanh toán)`,
+      `Boi thuong DH ${order.order_id.split('-')[0]}`,
     );
   }
 
@@ -632,22 +630,18 @@ export class TransferService {
       order.buyer_id,
       order.order_id,
       new Prisma.Decimal(order.deposit_amount),
-      `Hoàn cọc đơn hàng ${order.order_id.split('-')[0]} (Người bán từ chối)`,
+      `Hoan coc DH ${order.order_id.split('-')[0]}`,
     );
   }
 
   // 4. Buyer Cancels (Order CANCELLED_BY_BUYER)
   async createBuyerCancelTransfer(order: any) {
-    // Note: status here refers to the state BEFORE cancellation.
-    // If we only have the current status, you might check if they had already paid the full amount or confirmed.
-    // E.g. we can pass the "previousStatus" safely. 
-    // Assuming 'DEPOSITED' -> Refund Buyer, else -> Compensate Seller.
     if (order.status === 'DEPOSITED' || order.status === 'PENDING') {
       return this.createDraftTransfer(
         order.buyer_id,
         order.order_id,
         new Prisma.Decimal(order.deposit_amount),
-        `Hoàn cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua tự hủy)`,
+        `Hoan coc DH ${order.order_id.split('-')[0]}`,
       );
     } else {
       // Order status was CONFIRMED or PAID
@@ -655,7 +649,7 @@ export class TransferService {
         order.listing.seller_id,
         order.order_id,
         new Prisma.Decimal(order.deposit_amount),
-        `Bồi thường cọc đơn hàng ${order.order_id.split('-')[0]} (Người mua hủy sau xác nhận)`,
+        `Boi thuong DH ${order.order_id.split('-')[0]}`,
       );
     }
   }

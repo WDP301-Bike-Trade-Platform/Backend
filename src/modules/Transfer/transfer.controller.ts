@@ -114,12 +114,8 @@ export class TransferController {
   @ApiOperation({ summary: 'Get transfer details by reference code' })
   async getTransferByReference(
     @Param('referenceId') referenceId: string,
-    @Req() req: Request & { user: JwtUser },
   ) {
-    return this.transferService.getTransferByReference(
-      referenceId,
-      req.user.user_id,
-    );
+    return this.transferService.getTransferByReference(referenceId);
   }
 
   @Get(':transferId')
@@ -127,9 +123,8 @@ export class TransferController {
   @ApiOperation({ summary: 'Get transfer details by ID' })
   async getTransfer(
     @Param('transferId') transferId: string,
-    @Req() req: Request & { user: JwtUser },
   ) {
-    return this.transferService.getTransferById(transferId, req.user.user_id);
+    return this.transferService.getTransferById(transferId);
   }
 }
 
