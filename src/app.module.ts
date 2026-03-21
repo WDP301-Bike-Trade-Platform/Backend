@@ -16,6 +16,8 @@ import { WishlistModule } from './modules/Wishlist/wishlist.module';
 import { InspectionModule } from './modules/Inspections/inspection.module';
 import { ReportModule } from './modules/Report/report.module';
 import { ShippingModule } from './modules/Shipping/shipping.module';
+import { AIModule } from './modules/AI/ai.module';
+import { DashboardModule } from './modules/Dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { ShippingModule } from './modules/Shipping/shipping.module';
     InspectionModule,
     ReportModule,
     ShippingModule,
+    AIModule,
+    DashboardModule
   ],
 })
 export class AppModule {}

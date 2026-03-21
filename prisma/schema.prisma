@@ -12,7 +12,6 @@ model Role {
   role_id   Int      @id @default(autoincrement())
   role_name RoleName @unique
   users     User[]
-
   @@map("roles")
 }
 
@@ -56,6 +55,7 @@ model User {
   reports              Report[]         @relation("UserReports") // 👈 báo cáo do user này tạo
   reportsProcessed     Report[]         @relation("AdminProcessed") // 👈 báo cáo do user này (admin) xử lý
   role                 Role             @relation(fields: [role_id], references: [role_id])
+  interactions UserInteraction[] // 👈 thêm dòng này
 
   @@map("users")
 }
@@ -156,10 +156,35 @@ model Listing {
   reports       Report[]
   reviews       Review[]
   wishlistItems WishlistItem[]
-
+  interactions UserInteraction[] // 👈 thêm dòng này
+  embedding Unsupported("vector(768)")?
   @@map("listings")
 }
+enum InteractionType {
+  VIEW
+  CLICK
+  ADD_TO_CART
+  REMOVE_FROM_CART
+  PURCHASE
+  SEARCH_CLICK
+  WISHLIST_ADD
+  WISHLIST_REMOVE
+} 
+model UserInteraction {
+  interaction_id String          @id @default(uuid())
+  user_id        String
+  listing_id     String
+  type           InteractionType
+  metadata       Json?           // lưu thêm thông tin như query search, thời gian xem, v.v.
+  created_at     DateTime        @default(now())
 
+  user    User    @relation(fields: [user_id], references: [user_id])
+  listing Listing @relation(fields: [listing_id], references: [listing_id])
+
+  @@index([user_id])
+  @@index([listing_id])
+  @@map("user_interactions")
+}
 model ListingMedia {
   media_id    String    @id @default(uuid())
   listing_id  String
@@ -350,7 +375,8 @@ model Message {
   listing     Listing? @relation(fields: [listing_id], references: [listing_id])
   receiver    User?    @relation("Receiver", fields: [receiver_id], references: [user_id])
   sender      User     @relation("Sender", fields: [sender_id], references: [user_id])
-
+  is_ai_generated Boolean @default(false)
+  ai_metadata     Json? 
   @@map("messages")
 }
 
@@ -376,7 +402,10 @@ model Review {
   reviewer             User      @relation("Reviewer", fields: [reviewer_id], references: [user_id])
   seller               User?     @relation("ReviewSeller", fields: [seller_id], references: [user_id])
   target               User      @relation("Target", fields: [target_id], references: [user_id])
-
+  confidence_score Float?   // điểm tin cậy (0-1)
+  is_flagged       Boolean? @default(false) // đánh dấu cần kiểm tra
+  analysis_result  Json?    // chi tiết phân tích (sentiment, keywords, lý do flag)
+  analyzed_at      DateTime? // thời gian phân tích
   @@map("reviews")
 }
 
@@ -598,6 +627,8 @@ enum RoleName {
   USER
   INSPECTOR
   ADMIN
+  AI_ASSISTANT   // 👈 thêm role cho bot
+
 }
 
 enum ListingStatus {
