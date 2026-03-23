@@ -54,6 +54,8 @@ model User {
   wishlist             Wishlist?
   reports              Report[]         @relation("UserReports") // 👈 báo cáo do user này tạo
   reportsProcessed     Report[]         @relation("AdminProcessed") // 👈 báo cáo do user này (admin) xử lý
+  buyerOffers          Offer[]          @relation("BuyerOffers")
+  sellerOffers         Offer[]          @relation("SellerOffers")
   role                 Role             @relation(fields: [role_id], references: [role_id])
   interactions UserInteraction[] // 👈 thêm dòng này
 
@@ -158,6 +160,8 @@ model Listing {
   wishlistItems WishlistItem[]
   interactions UserInteraction[] // 👈 thêm dòng này
   embedding Unsupported("vector(768)")?
+  offers        Offer[]
+
   @@map("listings")
 }
 enum InteractionType {
@@ -245,6 +249,8 @@ model Order {
   reviews         Review[]
   shipment        Shipment?
   transfers       Transfer[]
+  offer_id        String?          @unique
+  offer           Offer?           @relation(fields: [offer_id], references: [offer_id])
 
   @@map("orders")
 }
@@ -362,19 +368,29 @@ model Chat {
   @@map("chats")
 }
 
+enum MessageType {
+  TEXT
+  IMAGE
+  OFFER
+}
+
 model Message {
-  message_id  String   @id @default(uuid())
+  message_id  String       @id @default(uuid())
   sender_id   String
   receiver_id String?
   listing_id  String?
   content     String?
-  created_at  DateTime @default(now())
+  created_at  DateTime     @default(now())
   chat_id     String?
   image_url   String?
-  chat        Chat?    @relation(fields: [chat_id], references: [chat_id])
-  listing     Listing? @relation(fields: [listing_id], references: [listing_id])
-  receiver    User?    @relation("Receiver", fields: [receiver_id], references: [user_id])
-  sender      User     @relation("Sender", fields: [sender_id], references: [user_id])
+  type        MessageType  @default(TEXT)
+  offer_id    String?
+  
+  chat        Chat?        @relation(fields: [chat_id], references: [chat_id])
+  listing     Listing?     @relation(fields: [listing_id], references: [listing_id])
+  receiver    User?        @relation("Receiver", fields: [receiver_id], references: [user_id])
+  sender      User         @relation("Sender", fields: [sender_id], references: [user_id])
+  offer       Offer?       @relation(fields: [offer_id], references: [offer_id])
   is_ai_generated Boolean @default(false)
   ai_metadata     Json? 
   @@map("messages")
@@ -664,6 +680,7 @@ enum NotificationType {
   ORDER
   INSPECTION
   SYSTEM
+  OFFER
 }
 
 enum MediaType {
@@ -686,3 +703,29 @@ enum AddressType {
   DROPOFF
 }
 
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  DONE
+}
+
+model Offer {
+  offer_id      String      @id @default(uuid())
+  listing_id    String
+  buyer_id      String
+  seller_id     String
+  offered_price Decimal
+  status        OfferStatus @default(PENDING)
+  created_at    DateTime    @default(now())
+  updated_at    DateTime?   @updatedAt
+
+  listing       Listing     @relation(fields: [listing_id], references: [listing_id])
+  buyer         User        @relation("BuyerOffers", fields: [buyer_id], references: [user_id])
+  seller        User        @relation("SellerOffers", fields: [seller_id], references: [user_id])
+  order         Order?
+  messages      Message[]
+
+  @@map("offers")
+}

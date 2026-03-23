@@ -165,16 +165,42 @@ export class OrderService {
           );
         }
 
-        const totalAmount = new Prisma.Decimal(listing.vehicle.price);
-        const requiresDeposit = dto.isDeposit ?? false;
-        const depositAmount = this.calculateDepositAmount(
-          totalAmount,
-          requiresDeposit,
-        );
+        let totalAmount = new Prisma.Decimal(listing.vehicle.price);
+        let depositAmount: Prisma.Decimal;
+        let requiresDeposit = dto.isDeposit ?? false;
+
+        if (dto.offerId) {
+          const offer = await tx.offer.findUnique({
+            where: { offer_id: dto.offerId },
+          });
+
+          if (!offer) {
+            throw new NotFoundException('Offer not found');
+          }
+          if (offer.listing_id !== dto.listingId) {
+            throw new BadRequestException('Offer does not match this listing');
+          }
+          if (offer.buyer_id !== buyerId) {
+            throw new ForbiddenException('This is not your offer');
+          }
+          if (offer.status !== 'ACCEPTED') {
+            throw new BadRequestException('Offer must be ACCEPTED to checkout');
+          }
+
+          totalAmount = new Prisma.Decimal(offer.offered_price);
+          depositAmount = totalAmount; // Enforce 100% upfront payment 
+          requiresDeposit = true; // Act as a single full payment via deposit pipeline
+        } else {
+          depositAmount = this.calculateDepositAmount(
+            totalAmount,
+            requiresDeposit,
+          );
+        }
 
         const order = await tx.order.create({
           data: {
             buyer_id: buyerId,
+            offer_id: dto.offerId || undefined,
             listing_id: dto.listingId,
             deposit_amount: depositAmount,
             status: OrderStatus.PENDING,
@@ -188,8 +214,8 @@ export class OrderService {
             listing_id: dto.listingId,
             vehicle_id: listing.vehicle_id,
             quantity: 1,
-            unit_price: listing.vehicle.price,
-            total_price: listing.vehicle.price,
+            unit_price: totalAmount,
+            total_price: totalAmount,
             created_at: new Date(),
           },
         });

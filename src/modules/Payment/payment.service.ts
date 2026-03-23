@@ -10,7 +10,6 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 @Injectable()
 export class PaymentService {
   private payos: PayOS;
-  private readonly BACKEND_URL: string;
 
   constructor(
     private configService: ConfigService,
@@ -18,9 +17,7 @@ export class PaymentService {
     @Inject(forwardRef(() => OrderService))
     private orderService: OrderService,
   ) {
-    // URL backend dùng cho returnUrl/cancelUrl của PayOS
-    // PayOS redirect browser tới HTTPS URL → server redirect sang deep link mobile
-    this.BACKEND_URL = this.configService.get<string>('BACKEND_URL') || 'http://localhost:3443';
+
     this.payos = new PayOS({
       clientId: this.configService.get<string>('PAYOS_CLIENT_ID') || '',
       apiKey: this.configService.get<string>('PAYOS_API_KEY') || '',
@@ -102,6 +99,10 @@ export class PaymentService {
         if (amountToCharge <= 0) {
           throw new BadRequestException('Remaining amount is 0 or negative. No further payment required.');
         }
+      }
+
+      if (order.offer_id) {
+        stagePrefix = 'OFR';
       }
 
       // Chuẩn bị items cho PayOS
@@ -299,6 +300,7 @@ export class PaymentService {
       const isDeposit = rawDesc.startsWith('DEP');
       const isRemaining = rawDesc.startsWith('REM');
       const isFull = rawDesc.startsWith('FUL');
+      const isOffer = rawDesc.startsWith('OFR');
 
       // Tìm Payment mapping chuẩn nhất dựa trên order_code thay vì cắt chuỗi description
       const paymentMapping = await this.prisma.payment.findUnique({
@@ -348,7 +350,7 @@ export class PaymentService {
       // Logic: Validate paid amount >= required amount for security
       const amountPaid = verifiedData.amount;
 
-      if (isFull || amountPaid >= totalPrice) {
+      if (isFull || isOffer || amountPaid >= totalPrice) {
         // FULL payment from PENDING -> PAID
         if (order.status === 'PENDING') {
           const updateResult = await this.orderService.updateOrderStatus(
@@ -361,8 +363,16 @@ export class PaymentService {
             },
           );
           nextStatus = updateResult.data?.status ?? OrderStatus.PAID;
+
+          // Cập nhật trạng thái OFFER thành DONE nếu là giao dịch qua Offer
+          if (order.offer_id) {
+            await this.prisma.offer.update({
+              where: { offer_id: order.offer_id },
+              data: { status: 'DONE' },
+            });
+          }
         }
-      } else if (isDeposit || (!isDeposit && !isRemaining && !isFull)) {
+      } else if (isDeposit || (!isDeposit && !isRemaining && !isFull && !isOffer)) {
         // Explicit DEP prefix -> PENDING -> DEPOSITED phase
         if (order.status === 'PENDING') {
           const updateResult = await this.orderService.updateOrderStatus(
@@ -390,7 +400,6 @@ export class PaymentService {
             }
           });
 
-          // Cập nhật trạng thái Order thành PAID thông qua OrderService
           const updateResult = await this.orderService.updateOrderStatus(
             order.order_id,
             OrderStatus.PAID,
@@ -421,6 +430,42 @@ export class PaymentService {
             ]
           });
           nextStatus = updateResult.data?.status ?? OrderStatus.PAID;
+        }
+      }
+
+      if (nextStatus === OrderStatus.PAID || nextStatus === OrderStatus.DEPOSITED) {
+        try {
+          const pendingOffers = await this.prisma.offer.findMany({
+            where: {
+              listing_id: order.listing_id,
+              status: 'PENDING',
+            },
+            select: { offer_id: true, buyer_id: true },
+          });
+
+          if (pendingOffers.length > 0) {
+            await this.prisma.offer.updateMany({
+              where: {
+                listing_id: order.listing_id,
+                status: 'PENDING',
+              },
+              data: { status: 'REJECTED' },
+            });
+
+            // Notify each buyer whose offer was auto-rejected
+            const vehicleName = `${order.listing.vehicle.brand} ${order.listing.vehicle.model}`;
+            await this.prisma.notification.createMany({
+              data: pendingOffers.map((o) => ({
+                user_id: o.buyer_id,
+                type: 'OFFER' as any,
+                title: 'Offer Rejected',
+                message: `Your offer for ${vehicleName} has been automatically rejected because the item has been sold.`,
+                created_at: new Date(),
+              })),
+            });
+          }
+        } catch (err) {
+          console.error('Failed to reject pending offers:', err);
         }
       }
 

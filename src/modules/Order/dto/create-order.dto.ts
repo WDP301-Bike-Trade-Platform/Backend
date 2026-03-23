@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsIn } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsIn, IsUUID } from 'class-validator';
 import { SUPPORTED_PAYMENT_METHODS } from '../order.constants';
 import type { SupportedPaymentMethod } from '../order.constants';
 
@@ -41,4 +41,10 @@ export class CreateOrderDto {
   @ApiPropertyOptional({ description: 'Cờ xác định lệnh thanh toán đặt cọc 10%' })
   @IsOptional()
   isDeposit?: boolean;
+
+  @ApiPropertyOptional({ description: 'ID của lời trả giá (nếu có)' })
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  offerId?: string;
 }

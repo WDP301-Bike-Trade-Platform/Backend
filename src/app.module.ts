@@ -16,6 +16,7 @@ import { WishlistModule } from './modules/Wishlist/wishlist.module';
 import { InspectionModule } from './modules/Inspections/inspection.module';
 import { ReportModule } from './modules/Report/report.module';
 import { ShippingModule } from './modules/Shipping/shipping.module';
+import { OfferModule } from './modules/Offer/offer.module';
 import { AIModule } from './modules/AI/ai.module';
 import { DashboardModule } from './modules/Dashboard/dashboard.module';
 
@@ -36,6 +37,7 @@ import { DashboardModule } from './modules/Dashboard/dashboard.module';
     TransferModule,
     NotificationModule,
     ChatModule,
+    OfferModule,
     WishlistModule,
     InspectionModule,
     ReportModule,
@@ -44,4 +46,4 @@ import { DashboardModule } from './modules/Dashboard/dashboard.module';
     DashboardModule
   ],
 })
-export class AppModule {}
+export class AppModule { }

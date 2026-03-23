@@ -105,19 +105,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await client.leave(`chat:${data.chatId}`);
   }
 
-  /** Client gửi tin nhắn */
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody()
-    data: { chatId: string; content?: string; imageUrl?: string },
+    data: { chatId: string; content?: string; imageUrl?: string; type?: any; offerId?: string },
   ) {
     if (!client.userId) return;
 
     const result = await this.chatService.sendMessage(
       client.userId,
       data.chatId,
-      { content: data.content, imageUrl: data.imageUrl },
+      { content: data.content, imageUrl: data.imageUrl, type: data.type, offerId: data.offerId },
     );
 
     // Broadcast tin nhắn tới tất cả members trong room

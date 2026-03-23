@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, MessageType } from '@prisma/client';
 import { PrismaService } from 'src/database/prisma.service';
 import { NotificationService } from '../Notification/notification.service';
 import { CreateChatDto } from './dto/create-chat.dto';
@@ -31,6 +31,11 @@ export interface MessageResponse {
   messageId: string;
   chatId: string;
   senderId: string;
+  type: MessageType | string;
+  offerId: string | null;
+  offerStatus: string | null;
+  offeredPrice: number | null;
+  listing?: any;
   content: string | null;
   imageUrl: string | null;
   sentAt: Date;
@@ -43,7 +48,7 @@ export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
   /** Lấy danh sách cuộc trò chuyện của user hiện tại */
   async getMyChats(userId: string): Promise<ChatThreadResponse[]> {
@@ -72,11 +77,11 @@ export class ChatService {
           otherUserId: isUser1 ? chat.user2_id : chat.user1_id,
           otherUser: otherUser
             ? {
-                userId: otherUser.user_id,
-                email: otherUser.email,
-                fullName: otherUser.full_name,
-                avatarUrl: otherUser.profile?.avatar_url ?? null,
-              }
+              userId: otherUser.user_id,
+              email: otherUser.email,
+              fullName: otherUser.full_name,
+              avatarUrl: otherUser.profile?.avatar_url ?? null,
+            }
             : null,
           lastMessage: lastMsg?.content ?? lastMsg?.image_url ?? null,
           lastMessageAt: lastMsg?.created_at ?? null,
@@ -184,6 +189,7 @@ export class ChatService {
       this.prisma.message.findMany({
         where: { chat_id: chatId },
         orderBy: { created_at: 'desc' },
+        include: { offer: { include: { listing: { include: { vehicle: true, media: true } } } } },
         skip,
         take,
       }),
@@ -195,6 +201,11 @@ export class ChatService {
         messageId: m.message_id,
         chatId: m.chat_id!,
         senderId: m.sender_id,
+        type: m.type,
+        offerId: m.offer_id,
+        offerStatus: (m as any).offer?.status ?? null,
+        offeredPrice: (m as any).offer ? Number((m as any).offer.offered_price) : null,
+        listing: (m as any).offer?.listing ?? null,
         content: m.content,
         imageUrl: m.image_url,
         sentAt: m.created_at,
@@ -208,9 +219,9 @@ export class ChatService {
     chatId: string,
     dto: SendMessageDto,
   ): Promise<{ success: boolean; message: string; data: MessageResponse }> {
-    if (!dto.content?.trim() && !dto.imageUrl?.trim()) {
+    if (!dto.content?.trim() && !dto.imageUrl?.trim() && dto.type !== 'OFFER') {
       throw new BadRequestException(
-        'Content or image must not be empty.',
+        'Content or image or offer must not be empty.',
       );
     }
 
@@ -230,6 +241,17 @@ export class ChatService {
         sender_id: userId,
         content: dto.content?.trim() ?? null,
         image_url: dto.imageUrl?.trim() ?? null,
+        type: dto.type ?? 'TEXT',
+        offer_id: dto.offerId ?? null,
+      },
+      include: {
+        offer: {
+          include: {
+            listing: {
+              include: { vehicle: true, media: true },
+            },
+          },
+        },
       },
     });
 
@@ -250,6 +272,11 @@ export class ChatService {
         messageId: msg.message_id,
         chatId: msg.chat_id!,
         senderId: msg.sender_id,
+        type: msg.type,
+        offerId: msg.offer_id,
+        offerStatus: (msg as any).offer?.status ?? null,
+        offeredPrice: (msg as any).offer ? Number((msg as any).offer.offered_price) : null,
+        listing: (msg as any).offer?.listing ?? null,
         content: msg.content,
         imageUrl: msg.image_url,
         sentAt: msg.created_at,
