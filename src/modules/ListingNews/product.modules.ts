@@ -12,9 +12,10 @@ import { ListingMediaService } from './Service/listingMediaService';
 import { ListingMediaController } from './Controller/listing-media.controller';
 import { AuthModule } from '../Auth/auth.module';
 import { SearchService } from './Service/search.service';
+import { AIModule } from '../AI/ai.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule,AIModule],
   controllers: [
     ProductsController,
     ListingMediaController,
