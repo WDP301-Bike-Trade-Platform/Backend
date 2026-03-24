@@ -9,5 +9,7 @@ import { HttpModule } from '@nestjs/axios';
   imports: [AuthModule, HttpModule,],
   controllers: [AIController],
   providers: [AIService, EmbeddingService],
+  exports: [EmbeddingService], // 👈 QUAN TRỌNG: phải export
+
 })
 export class AIModule {}

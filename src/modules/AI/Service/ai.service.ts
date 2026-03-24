@@ -54,40 +54,40 @@ export class AIService {
   }
 
   // 1. Tìm kiếm thông minh
-  async semanticSearch(dto: SearchDto) {
-    const { query, limit = 20 } = dto;
+async semanticSearch(dto: SearchDto) {
+  const { query, limit = 20 } = dto;
 
-    const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-
-    const results = await this.prisma.$queryRaw<{ listing_id: string; distance: number }[]>`
-      SELECT listing_id, embedding <=> ${queryEmbedding}::vector as distance
-      FROM "listings"
-      WHERE embedding IS NOT NULL
-      ORDER BY distance
-      LIMIT ${limit}
-    `;
-
-    const listingIds = results.map(r => r.listing_id);
-    if (listingIds.length === 0) return [];
-
-    const listings = await this.prisma.listing.findMany({
-      where: { listing_id: { in: listingIds } },
-      include: {
-        vehicle: true,
-        media: {
-          where: { is_cover: true },
-          take: 1,
-        },
-        seller: {
-          select: { full_name: true, user_id: true },
-        },
-      },
-    });
-
-    return listingIds
-      .map(id => listings.find(l => l.listing_id === id))
-      .filter(Boolean);
+  const queryEmbedding = await this.embeddingService.generateEmbedding(query);
+  if (!queryEmbedding) {
+    throw new BadRequestException('Không thể tạo embedding cho query');
   }
+
+  const embeddingStr = JSON.stringify(queryEmbedding);
+  const results = await this.prisma.$queryRaw<{ listing_id: string; distance: number }[]>`
+    SELECT listing_id, embedding <=> ${embeddingStr}::vector as distance
+    FROM "listings"
+    WHERE embedding IS NOT NULL
+      AND status = 'ACTIVE'   -- nếu muốn chỉ listing đang bán
+    ORDER BY distance
+    LIMIT ${limit}
+  `;
+
+  const listingIds = results.map(r => r.listing_id);
+  if (listingIds.length === 0) return [];
+
+  const listings = await this.prisma.listing.findMany({
+    where: { listing_id: { in: listingIds } },
+    include: {
+      vehicle: true,
+      media: { where: { is_cover: true }, take: 1 },
+      seller: { select: { full_name: true, user_id: true } },
+    },
+  });
+
+  return listingIds
+    .map(id => listings.find(l => l.listing_id === id))
+    .filter(Boolean);
+}
 
   // 2. Gợi ý cá nhân hóa
   async getRecommendations(userId: string, dto: RecommendationDto) {
