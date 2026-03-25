@@ -140,6 +140,7 @@ model Listing {
   listing_id    String         @id @default(uuid())
   seller_id     String
   vehicle_id    String
+  title         String         @default("Chưa có tiêu đề")
   status        ListingStatus
   approved_by   String?
   approved_at   DateTime?

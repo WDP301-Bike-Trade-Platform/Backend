@@ -78,12 +78,17 @@ export class UpdateListingService {
         });
       }
 
-      // 3️⃣ Touch updated_at
+      // 3️⃣ Update listing fields (title, updated_at)
+      const listingUpdateData: Prisma.ListingUpdateInput = {
+        updated_at: new Date(),
+      };
+      if (dto.title !== undefined) {
+        listingUpdateData.title = dto.title.trim();
+      }
+
       await tx.listing.update({
         where: { listing_id: listingId },
-        data: {
-          updated_at: new Date(),
-        },
+        data: listingUpdateData,
       });
 
       return {

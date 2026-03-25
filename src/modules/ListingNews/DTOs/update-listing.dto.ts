@@ -12,6 +12,11 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateListingDto {
   // ===== Price / description =====
+  @ApiPropertyOptional({ example: 'Bán xe đạp Giant Escape 3' })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
   @ApiPropertyOptional({ example: 8200000 })
   @IsOptional()
   @IsNumber()

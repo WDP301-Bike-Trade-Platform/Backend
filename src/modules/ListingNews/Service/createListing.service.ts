@@ -92,6 +92,7 @@ export class CreateListingService {
         data: {
           seller_id: sellerId,
           vehicle_id: vehicle.vehicle_id,
+          title: dto.title.trim(),
           status: ListingStatus.PENDING_APPROVAL,
           created_at: new Date(),
           updated_at: new Date(),
@@ -112,6 +113,7 @@ export class CreateListingService {
 
       // Tạo embedding từ thông tin xe
       const description = `
+        Title: ${dto.title.trim()}
         ${vehicle.brand} ${vehicle.model} ${vehicle.year}
         Price: ${vehicle.price}
         Condition: ${vehicle.condition}

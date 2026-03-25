@@ -21,18 +21,23 @@ export class SearchService {
 
     // 1. Tìm kiếm theo keyword
     if (keyword) {
-      vehicleFilter = {
-        OR: [
-          { brand: { contains: keyword, mode: 'insensitive' } },
-          { model: { contains: keyword, mode: 'insensitive' } },
-          { description: { contains: keyword, mode: 'insensitive' } },
-          {
-            category: {
-              name: { contains: keyword, mode: 'insensitive' },
-            },
+      where.OR = [
+        { title: { contains: keyword, mode: 'insensitive' } },
+        {
+          vehicle: {
+            OR: [
+              { brand: { contains: keyword, mode: 'insensitive' } },
+              { model: { contains: keyword, mode: 'insensitive' } },
+              { description: { contains: keyword, mode: 'insensitive' } },
+              {
+                category: {
+                  name: { contains: keyword, mode: 'insensitive' },
+                },
+              },
+            ],
           },
-        ],
-      };
+        },
+      ];
     }
 
     // 2. Lọc theo category
@@ -117,7 +122,7 @@ export class SearchService {
     // Map dữ liệu trả về (có thể điều chỉnh để lấy nhiều thông tin hơn nếu cần)
     const products = items.map((listing) => ({
       id: listing.listing_id,
-      title: `${listing.vehicle.brand} ${listing.vehicle.model} ${listing.vehicle.year}`,
+      title: listing.title,
       price: listing.vehicle.price, // Prisma.Decimal trả về dạng { s, e, d }
       condition: listing.vehicle.condition,
       mileage_km: listing.vehicle.mileage_km,
