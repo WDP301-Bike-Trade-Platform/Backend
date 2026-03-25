@@ -549,7 +549,7 @@ export class OrderService {
         data: { status: PaymentStatus.FAILED },
       });
 
-      // Scenario 3: Seller Rejects -> Refund deposit to Buyer (DRAFTING)
+      // Scenario 3: Seller Từ chối -> Hoàn tiền cọc cho Người mua (DRAFTING)
       try {
         await this.transferService.createSellerRejectRefund(updatedOrder);
         this.logger.log(`[Escrow] Created DRAFTING refund transfer for Order ${orderId} (Seller Reject)`);
@@ -634,9 +634,9 @@ export class OrderService {
         data: { status: PaymentStatus.FAILED },
       });
 
-      // Scenario 4: Buyer Cancels -> pass the PREVIOUS status to determine refund vs compensation
+      // Scenario 4: Buyer Hủy -> chuyển trạng thái TRƯỚC ĐÓ để xác định hoàn tiền hay bồi thường
       try {
-        // We pass the order with the PREVIOUS status so TransferService knows the context
+        // Chúng ta truyền order với trạng thái TRƯỚC ĐÓ để TransferService biết ngữ cảnh
         const orderWithPreviousStatus = { ...updatedOrder, status: previousStatus };
         await this.transferService.createBuyerCancelTransfer(orderWithPreviousStatus);
         this.logger.log(`[Escrow] Created DRAFTING transfer for Order ${orderId} (Buyer Cancel, was ${previousStatus})`);

@@ -18,7 +18,7 @@ export class ReportService {
       where: { listing_id: dto.listingId },
       select: { listing_id: true },
     });
-    if (!listing) throw new NotFoundException('Listing không tồn tại');
+    if (!listing) throw new NotFoundException('Listing does not exist');
 
     return this.prisma.report.create({
       data: {
@@ -39,11 +39,11 @@ export class ReportService {
       where: { report_id: reportId },
       select: { user_id: true, status: true },
     });
-    if (!report) throw new NotFoundException('Báo cáo không tồn tại');
+    if (!report) throw new NotFoundException('Report does not exist');
     if (report.user_id !== userId)
-      throw new ForbiddenException('Không thể hủy báo cáo của người khác');
+      throw new ForbiddenException('Cannot cancel someone else\'s report');
     if (report.status !== ReportStatus.PENDING)
-      throw new BadRequestException('Chỉ có thể hủy báo cáo đang chờ xử lý');
+      throw new BadRequestException('Only pending reports can be cancelled');
 
     return this.prisma.report.update({
       where: { report_id: reportId },
@@ -99,7 +99,7 @@ export class ReportService {
         admin: { select: { user_id: true, full_name: true } },
       },
     });
-    if (!report) throw new NotFoundException('Báo cáo không tồn tại');
+    if (!report) throw new NotFoundException('Report does not exist');
     return report;
   }
 
@@ -113,7 +113,7 @@ export class ReportService {
     // Sửa lỗi TypeScript: ép kiểu mảng về ReportStatus[]
     const 終了Statuses: ReportStatus[] = [ReportStatus.RESOLVED, ReportStatus.REJECTED, ReportStatus.CANCELLED];
     if (終了Statuses.includes(report.status)) {
-      throw new BadRequestException('Báo cáo đã kết thúc, không thể xử lý thêm');
+      throw new BadRequestException('Report has already been finalized and cannot be processed further');
     }
 
     const data: any = { ...dto };

@@ -115,7 +115,7 @@ export class AdminUserService {
         role: true,
       },
     });
-    if (!user) throw new NotFoundException('User không tồn tại');
+    if (!user) throw new NotFoundException('User does not exist');
     return user;
   }
 
@@ -171,7 +171,7 @@ export class AdminUserService {
         },
       },
     });
-    if (!user) throw new NotFoundException('User không tồn tại');
+    if (!user) throw new NotFoundException('User does not exist');
 
     // Loại bỏ password nếu có (prisma không select password nhưng an toàn)
     const { password, ...userInfo } = user as any;
@@ -194,13 +194,13 @@ export class AdminUserService {
       where: { user_id: userId },
       select: { user_id: true, email: true, full_name: true, locked_until: true },
     });
-    if (!user) throw new NotFoundException('User không tồn tại');
+    if (!user) throw new NotFoundException('User does not exist');
 
     const now = new Date();
     let lockedUntil: Date | null = null;
     if (dto.lockedUntil) {
       const date = new Date(dto.lockedUntil);
-      if (isNaN(date.getTime())) throw new BadRequestException('Thời gian khóa không hợp lệ');
+      if (isNaN(date.getTime())) throw new BadRequestException('Invalid lock duration');
       lockedUntil = date > now ? date : null;
     }
 
@@ -210,10 +210,10 @@ export class AdminUserService {
     });
 
     const action = lockedUntil ? 'locked' : 'unlocked';
-    const title = `Tài khoản của bạn đã được ${action === 'locked' ? 'khóa' : 'mở khóa'}`;
+    const title = `Your account has been ${action === 'locked' ? 'locked' : 'unlocked'}`;
     const message = dto.reason || (action === 'locked' 
-      ? 'Tài khoản của bạn đã bị khóa do vi phạm quy định.' 
-      : 'Tài khoản của bạn đã được mở khóa.');
+      ? 'Your account has been locked due to a violation of our terms.' 
+      : 'Your account has been unlocked.');
 
     await this.prisma.notification.create({
       data: {

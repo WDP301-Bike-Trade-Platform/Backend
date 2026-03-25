@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 
 @Injectable()
 export class SearchService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async search(query: ProductSearchQuery) {
     const { keyword, category, price_range, location, page = 1, limit = 10 } = query;
@@ -48,12 +48,12 @@ export class SearchService {
       // Kiểm tra định dạng "min-max"
       const parts = price_range.split('-');
       if (parts.length !== 2) {
-        throw new BadRequestException('price_range phải có định dạng "min-max"');
+        throw new BadRequestException('price_range must be in "min-max" format');
       }
       const min = parseFloat(parts[0]);
       const max = parseFloat(parts[1]);
       if (isNaN(min) || isNaN(max)) {
-        throw new BadRequestException('Giá trị min và max phải là số');
+        throw new BadRequestException('Min and max values must be numbers');
       }
       const priceFilter: Prisma.DecimalFilter = {};
       if (min >= 0) priceFilter.gte = min;

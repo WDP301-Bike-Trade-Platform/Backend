@@ -100,9 +100,9 @@ export class ShippingDemoService {
     await this.prisma.shipmentTracking.create({
       data: {
         shipment_id: shipment.shipment_id,
-        status: 'Đơn hàng đã được tạo',
-        location: 'Kho người bán',
-        description: 'Đơn hàng đang chờ lấy',
+        status: 'Order has been created',
+        location: 'Seller warehouse',
+        description: 'Order is waiting to be picked up',
         tracked_at: new Date(),
       }
     });
@@ -111,8 +111,8 @@ export class ShippingDemoService {
     await this.notificationService.createNotification({
       userId: order.buyer_id,
       type: 'ORDER',
-      title: 'Đơn hàng đã được tạo vận đơn',
-      message: `Mã vận đơn: ${trackingNumber}. Dự kiến giao: ${estimatedDelivery.toLocaleDateString('vi-VN')}`,
+      title: 'Shipment label created',
+      message: `Tracking number: ${trackingNumber}. Estimated delivery: ${estimatedDelivery.toLocaleDateString('en-GB')}`,
       link: `/orders/${orderId}`,
     });
 
@@ -277,8 +277,8 @@ async getMyShipments(
       await this.notificationService.createNotification({
         userId: order.buyer_id,
         type: 'ORDER',
-        title: 'Người bán đã xác nhận chuẩn bị hàng',
-        message: 'Đơn hàng của bạn đã được người bán chuẩn bị xong, sẽ sớm được bàn giao cho đơn vị vận chuyển.',
+        title: 'Seller confirmed package preparation',
+        message: 'Your order has been prepared by the seller and will soon be handed over to the carrier.',
         link: `/orders/${updated.order_id}`,
       });
     }
@@ -306,8 +306,8 @@ async getMyShipments(
       data: {
         shipment_id: shipmentId,
         status: dto.status,
-        location: dto.location || 'Đang cập nhật',
-        description: dto.description || `Trạng thái chuyển sang ${dto.status}`,
+        location: dto.location || 'Updating',
+        description: dto.description || `Status changed to ${dto.status}`,
         tracked_at: new Date(),
       }
     });
@@ -332,8 +332,8 @@ async getMyShipments(
     await this.notificationService.createNotification({
       userId: shipment.order.buyer_id,
       type: 'ORDER',
-      title: 'Cập nhật vận chuyển',
-      message: `Đơn hàng của bạn đã chuyển sang trạng thái: ${dto.status}`,
+      title: 'Shipping update',
+      message: `Your order has changed status to: ${dto.status}`,
       link: `/orders/${shipment.order_id}`,
     });
 
@@ -381,8 +381,8 @@ async getMyShipments(
       if (newStatus) {
         await this.updateStatusManually(shipment.shipment_id, {
           status: newStatus,
-          location: 'Hệ thống tự động',
-          description: `Tự động chuyển sang ${newStatus}`,
+          location: 'Auto-system',
+          description: `Automatically progressed to ${newStatus}`,
         });
       }
     }

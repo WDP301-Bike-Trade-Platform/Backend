@@ -23,7 +23,7 @@ export class EscrowExpiryService {
     this.logger.log('Bắt đầu kiểm tra các Escrow quá hạn (5 phút SLA)...');
 
     const timeoutLimit = new Date();
-    timeoutLimit.setMinutes(timeoutLimit.getMinutes() - 5);
+    timeoutLimit.setHours(timeoutLimit.getHours() - 72);
 
     const expiredOrders = await this.prisma.order.findMany({
       where: {
@@ -103,7 +103,7 @@ export class EscrowExpiryService {
         user_id: order.buyer_id,
         type: 'ORDER',
         title: 'Order Forfeited',
-        message: `Your confirmed order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been forfeited due to 3m inactivity. Deposit is non-refundable.`,
+        message: `Your confirmed order for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} has been forfeited due to inactivity. Deposit is non-refundable.`,
         created_at: new Date(),
       },
     });
@@ -114,7 +114,7 @@ export class EscrowExpiryService {
         user_id: order.listing.seller_id,
         type: 'ORDER',
         title: 'Buyer Forfeited Deposit',
-        message: `The buyer did not pay the remaining amount for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} within 3m. Your listing is now ACTIVE and you received the deposit payout.`,
+        message: `The buyer did not pay the remaining amount for ${order.listing.vehicle.brand} ${order.listing.vehicle.model} within the required time. Your listing is now ACTIVE and you received the deposit payout.`,
         created_at: new Date(),
       },
     });

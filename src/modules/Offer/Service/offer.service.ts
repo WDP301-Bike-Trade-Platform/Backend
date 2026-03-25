@@ -66,10 +66,9 @@ export class OfferService {
       userId: listing.seller_id,
       type: 'OFFER',
       title: 'New offer on your product',
-      message: `A buyer just made an offer of ${dto.offeredPrice.toLocaleString('vi-VN')}đ for your product`,
+      message: `A buyer just made an offer of ${dto.offeredPrice.toLocaleString('vi-VN')} VND for your product`,
       link: `/chat`, // Navigate to Chat UI
     }).catch(e => console.error('Notification Error:', e));
-
     return offer;
   }
 
@@ -106,7 +105,7 @@ export class OfferService {
       userId: offer.buyer_id,
       type: 'OFFER',
       title: 'Offer accepted!',
-      message: `The seller has accepted the offer of ${offer.offered_price.toNumber().toLocaleString('vi-VN')}đ for the ${offer.listing.vehicle.brand}. Please pay 100% to complete the order!`,
+      message: `The seller has accepted the offer of ${offer.offered_price.toNumber().toLocaleString('vi-VN')} VND for the ${offer.listing.vehicle.brand}. Please pay 100% to complete the order!`,
       link: `/chat`,
     }).catch(e => console.error('Notification Error:', e));
 

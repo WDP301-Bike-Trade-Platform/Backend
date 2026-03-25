@@ -57,7 +57,7 @@ export class CreateListingService {
       let categoryId = sanitizeOptional(dto.category_id);
       if (!categoryId) {
         const otherCategory = await tx.category.findFirst({
-          where: { name: 'Khác' },
+          where: { name: 'Other' },
         });
         if (!otherCategory) throw new BadRequestException('Default category not found');
         categoryId = otherCategory.category_id;
@@ -113,15 +113,15 @@ export class CreateListingService {
       // Tạo embedding từ thông tin xe
       const description = `
         ${vehicle.brand} ${vehicle.model} ${vehicle.year}
-        Giá: ${vehicle.price}
-        Tình trạng: ${vehicle.condition}
-        Loại xe: ${vehicle.bike_type}
-        Khung: ${vehicle.material}
-        Phanh: ${vehicle.brake_type}
-        Nhóm linh kiện: ${vehicle.groupset || ''}
-        Kích thước khung: ${vehicle.frame_size || ''}
-        Số km đã đi: ${vehicle.mileage_km || ''}
-        Mô tả: ${vehicle.description || ''}
+        Price: ${vehicle.price}
+        Condition: ${vehicle.condition}
+        Bike type: ${vehicle.bike_type}
+        Frame: ${vehicle.material}
+        Brakes: ${vehicle.brake_type}
+        Groupset: ${vehicle.groupset || ''}
+        Frame size: ${vehicle.frame_size || ''}
+        Mileage: ${vehicle.mileage_km || ''}
+        Description: ${vehicle.description || ''}
       `.trim();
 
       try {

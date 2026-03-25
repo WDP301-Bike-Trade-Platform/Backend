@@ -211,17 +211,17 @@ export class TransferService {
     });
 
     if (!transfer) {
-      throw new NotFoundException('Transfer không tồn tại');
+      throw new NotFoundException('Transfer does not exist');
     }
 
     if (transfer.approval_state !== 'DRAFTING') {
       throw new BadRequestException(
-        `Transfer đang ở trạng thái "${transfer.approval_state}", chỉ có thể thực thi DRAFTING transfers`,
+        `Transfer is in status "${transfer.approval_state}", only DRAFTING transfers can be executed`,
       );
     }
 
     if (!transfer.user_id) {
-      throw new BadRequestException('Transfer không có user_id');
+      throw new BadRequestException('Transfer is missing user_id');
     }
 
     // 2. Lazy Fetching: Get freshest bank info from UserProfile
@@ -232,14 +232,14 @@ export class TransferService {
 
     if (!userProfile || !userProfile.bank_bin || !userProfile.bank_account) {
       throw new BadRequestException(
-        'Người dùng chưa cập nhật thông tin ngân hàng. Vui lòng yêu cầu người dùng cập nhật trước khi duyệt.',
+        'User has not updated bank information. Please request the user to update before approval.',
       );
     }
 
     // 3. Call PayOS SDK
     const transaction = transfer.transactions[0];
     if (!transaction) {
-      throw new BadRequestException('Transfer không có transaction nào');
+      throw new BadRequestException('Transfer has no transactions');
     }
 
     try {
@@ -300,12 +300,12 @@ export class TransferService {
     });
 
     if (!transfer) {
-      throw new NotFoundException('Transfer không tồn tại');
+      throw new NotFoundException('Transfer does not exist');
     }
 
     if (transfer.approval_state !== 'DRAFTING') {
       throw new BadRequestException(
-        `Transfer đang ở trạng thái "${transfer.approval_state}", chỉ có thể từ chối DRAFTING transfers`,
+        `Transfer is in status "${transfer.approval_state}", only DRAFTING transfers can be rejected`,
       );
     }
 
@@ -332,8 +332,8 @@ export class TransferService {
         data: {
           user_id: transfer.user_id,
           type: 'SYSTEM',
-          title: 'Lệnh chuyển tiền bị từ chối',
-          message: `Lệnh chuyển tiền (Mã: ${transfer.reference_id}) đã bị từ chối. Lý do: ${reason}`,
+          title: 'Transfer request rejected',
+          message: `Transfer request (ID: ${transfer.reference_id}) has been rejected. Reason: ${reason}`,
           created_at: new Date(),
         },
       });
@@ -587,8 +587,8 @@ export class TransferService {
         data: {
           user_id: userId,
           type: 'SYSTEM',
-          title: 'Cập nhật thông tin ngân hàng',
-          message: `Vui lòng cập nhật thông tin tài khoản ngân hàng trong hồ sơ để chúng tôi có thể duyệt lệnh chuyển tiền (Mã: ${referenceId}).`,
+          title: 'Update bank information',
+          message: `Please update your bank account information in your profile so we can process the transfer (Ref: ${referenceId}).`,
           created_at: new Date(),
         },
       });
@@ -610,7 +610,7 @@ export class TransferService {
       order.listing.seller_id,
       order.order_id,
       payoutAmount,
-      `Thanh toan DH ${order.order_id.split('-')[0]}`,
+      `Payment for Order ${order.order_id.split('-')[0]}`,
     );
   }
 
@@ -620,7 +620,7 @@ export class TransferService {
       order.listing.seller_id,
       order.order_id,
       new Prisma.Decimal(order.deposit_amount),
-      `Boi thuong DH ${order.order_id.split('-')[0]}`,
+      `Compensation for Order ${order.order_id.split('-')[0]}`,
     );
   }
 
@@ -630,7 +630,7 @@ export class TransferService {
       order.buyer_id,
       order.order_id,
       new Prisma.Decimal(order.deposit_amount),
-      `Hoan coc DH ${order.order_id.split('-')[0]}`,
+      `Deposit refund for Order ${order.order_id.split('-')[0]}`,
     );
   }
 
@@ -641,7 +641,7 @@ export class TransferService {
         order.buyer_id,
         order.order_id,
         new Prisma.Decimal(order.deposit_amount),
-        `Hoan coc DH ${order.order_id.split('-')[0]}`,
+        `Deposit refund for Order ${order.order_id.split('-')[0]}`,
       );
     } else {
       // Order status was CONFIRMED or PAID
@@ -649,7 +649,7 @@ export class TransferService {
         order.listing.seller_id,
         order.order_id,
         new Prisma.Decimal(order.deposit_amount),
-        `Boi thuong DH ${order.order_id.split('-')[0]}`,
+        `Compensation for Order ${order.order_id.split('-')[0]}`,
       );
     }
   }
@@ -676,7 +676,7 @@ export class TransferService {
   private getPayoutClient(): PayOS {
     if (!this.payoutClient) {
       throw new BadRequestException(
-        'Chưa cấu hình thông tin PayOS payout để thực hiện chuyển khoản',
+        'PayOS payout configuration is missing for transfers',
       );
     }
     return this.payoutClient;
