@@ -9,7 +9,7 @@ export class CreateListingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly embeddingService: EmbeddingService,
-  ) {}
+  ) { }
 
   async createListing(dto: CreateListingDto, sellerId: string) {
     // Kiểm tra profile (giữ nguyên như cũ)
@@ -26,16 +26,12 @@ export class CreateListingService {
     const profile = seller.profile;
     if (
       !profile ||
-      !profile.dob ||
-      !profile.gender ||
       !profile.national_id ||
-      !profile.avatar_url ||
       !profile.bank_account ||
-      !profile.bank_name ||
       !profile.bank_bin
     ) {
       throw new BadRequestException(
-        'Please complete your profile (date of birth, gender, national ID, avatar, bank info) before creating a listing',
+        'Please complete your profile before creating a listing',
       );
     }
 
