@@ -162,7 +162,8 @@ model Listing {
   interactions UserInteraction[] // 👈 thêm dòng này
   embedding Unsupported("vector(768)")?
   offers        Offer[]
-
+  is_certified   Boolean?  @default(false)
+  certified_at   DateTime?
   @@map("listings")
 }
 enum InteractionType {
