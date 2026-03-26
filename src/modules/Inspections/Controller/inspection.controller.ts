@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Patch, Param, Body, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/common/auth/jwt.guard';
 import { RolesGuard } from 'src/common/decorators/roles.guard';
 import { InspectionService } from '../Service/inspection.service';
@@ -29,7 +29,6 @@ export class InspectionController {
 
   /**
    * ==================== USER ENDPOINTS ====================
-   * Các endpoint dành riêng cho User (role_id = 1)
    */
 
   @Post()
@@ -67,7 +66,6 @@ export class InspectionController {
 
   /**
    * ==================== INSPECTOR ENDPOINTS ====================
-   * Các endpoint dành riêng cho Inspector (role_id = 2)
    */
 
   @Post(':id/assign')
@@ -101,7 +99,24 @@ export class InspectionController {
         * Cập nhật result_status (PASSED/FAILED)
         * Cập nhật report_url, notes, valid_until
         * request_status chuyển từ CONFIRMED → COMPLETED
+        * Nếu result_status = PASSED và valid_until > hiện tại → listing sẽ được đánh dấu chứng nhận (is_certified = true)
+      
+      **Lưu ý quan trọng:** 
+      - Trường \`validUntil\` phải là ISO 8601 string (vd: "2025-12-31T23:59:59Z")
+      - Nếu không set \`validUntil\` nhưng resultStatus = PASSED, listing sẽ không được chứng nhận
     `
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        resultStatus: { type: 'string', enum: ['PASSED', 'FAILED'], example: 'PASSED' },
+        reportUrl: { type: 'string', format: 'uri', example: 'https://example.com/report.pdf' },
+        notes: { type: 'string', example: 'Xe đạt chất lượng tốt' },
+        validUntil: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59Z' }
+      },
+      required: ['resultStatus']
+    }
   })
   @ApiResponse({ status: 200, description: 'Cập nhật báo cáo thành công' })
   @ApiResponse({ status: 403, description: 'Không có quyền hoặc sai trạng thái' })
@@ -115,7 +130,6 @@ export class InspectionController {
 
   /**
    * ==================== SHARED ENDPOINTS ====================
-   * Các endpoint dùng chung cho nhiều role (phân quyền trong service)
    */
 
   @Patch(':id/cancel')
@@ -202,7 +216,6 @@ export class InspectionController {
 
   /**
    * ==================== ADMIN/INSPECTOR ENDPOINTS ====================
-   * Các endpoint dành cho Admin và Inspector
    */
 
   @Patch(':id')
