@@ -18,7 +18,7 @@ export class CreateListingDto {
   @IsString()
   category_id?: string;
 
-  @ApiProperty({ example: 'Bán xe đạp Giant Escape 3' })
+  @ApiProperty({ example: 'Giant Escape 3 bicycle for sale.' })
   @IsString()
   @IsNotEmpty()
   title: string;
